@@ -9,7 +9,7 @@ def chirp_mass(f,fdot,A):
     '''
     returns the chirp mass in solar masses
     '''
-    Mc =  (fdot*f**(-11/3) * (5/96) * np.pi**(-8/3))**(3/5) / Msun
+    Mc =  (fdot*f**(-11./3.) * (5./96.) * np.pi**(-8./3.))**(3./5.) / Msun
     return Mc
 
 '''
@@ -27,13 +27,13 @@ def luminosity_distance(f,fdot,A):
     '''
     return the luminosity distance in s
     '''
-    dl = (5/48)*(fdot/(np.pi**2 * f**3 * A)) * c / pc
+    dl = (5./48.)*(fdot/(np.pi**2 * f**3 * A)) * c / pc
     return dl
 
 def amplitude(f,fdot,dl):
     '''
     return the amplitude in ??? units
     '''
-    A = (5/48)*(fdot/(np.pi**2 * f**3 * dl)) * c / pc
+    A = (5./48.)*(fdot/(np.pi**2 * f**3 * dl)) * c / pc
     return A
 
