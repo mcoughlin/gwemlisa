@@ -133,15 +133,15 @@ def basic_model(t,pars,grid='default'):
 
 def myprior(cube, ndim, nparams):
 
-        cube[0] = cube[0]*1.0 + 0.0
-        cube[1] = cube[1]*1.0 + 0.0
-        cube[2] = cube[2]*1.0 + 0.0
-        cube[3] = cube[3]*(imax-imin) + imin
-        cube[4] = cube[4]*(tmax-tmin) + tmin
-        cube[5] = cube[5]*4.0 - 2.0
-        cube[6] = cube[6]*10.0
-        cube[7] = cube[7]*1.0 + 0.0
-        cube[8] = cube[8]*(pmax-pmin) + pmin
+        cube[0] = cube[0]*1.0 + 0.0 #radius wd1
+        cube[1] = cube[1]*1.0 + 0.0 #radius wd2
+        cube[2] = cube[2]*1.0 + 0.0 #surface gravity
+        cube[3] = cube[3]*(imax-imin) + imin #inclination
+        cube[4] = cube[4]*(tmax-tmin) + tmin #phase
+        cube[5] = cube[5]*4.0 - 2.0 #scale?
+        cube[6] = cube[6]*10.0 #heat?
+        cube[7] = cube[7]*1.0 + 0.0 #mass ratio
+        cube[8] = cube[8]*(pmax-pmin) + pmin #period
 
 def myloglike(cube, ndim, nparams):
     r1 = cube[0]
@@ -197,7 +197,7 @@ plt.close()
 idx = [0,3]
 pts =  data_out[:,idx]
 pts[:,0] = (2.0/pts[:,0])/86400.0
-pts[:,1] = np.arccos(pts[:,1])
+pts[:,1] = np.arccos(pts[:,1])*np.pi/180
 
 pmin, pmax = np.min(pts[:,0]), np.max(pts[:,0])
 imin, imax = np.min(pts[:,1]), np.max(pts[:,1])
@@ -205,10 +205,10 @@ imin, imax = np.min(pts[:,1]), np.max(pts[:,1])
 kdedir = greedy_kde_areas_2d(pts)
 kdedir_pts = copy.deepcopy(kdedir)
 
-lightcurveFile = 'JulyChimeraBJD.csv'
+lightcurveFile = '../data/JulyChimeraBJD.csv'
 errorbudget = 0.1
 
-data=np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
+data = np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
 data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
 
