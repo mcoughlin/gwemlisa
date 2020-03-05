@@ -197,7 +197,7 @@ plt.close()
 idx = [0,3]
 pts =  data_out[:,idx]
 pts[:,0] = (2.0/pts[:,0])/86400.0
-pts[:,1] = np.arccos(pts[:,1])
+pts[:,1] = np.arccos(pts[:,1])*360.0/(2*np.pi)
 
 pmin, pmax = np.min(pts[:,0]), np.max(pts[:,0])
 imin, imax = np.min(pts[:,1]), np.max(pts[:,1])
