@@ -337,9 +337,9 @@ pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False
 multifile = "%s/2-post_equal_weights.dat"%plotDir
 data = np.loadtxt(multifile)
 
-r1, r2, J, i, t0,scale, heat_2, q, loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4]
+r1, r2, J, i, t0,scale, heat_2, q, loglikelihood, p = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9]
 idx = np.argmax(loglikelihood)
-r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best = data[idx,0:-1]
+r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, p_best = data[idx,0:-1]
 
 plotName = "%s/corner.pdf"%(plotDir)
 figure = corner.corner(data[:,:-1], labels=labels,
@@ -352,7 +352,7 @@ plt.savefig(plotName)
 plt.close()
 
 # generate the test light curve given parameters
-model_pars = [r1,r2,J,i,t0,scale,heat_2,q,p] # the parameters
+model_pars = [r1_best,r2_best,J_best,i_best,t0_best,scale_best,heat_2_best,q_best,p_best] # the parameters
 
 tmin, tmax = np.min(t), np.max(t)
 tmin, tmax = np.min(t), np.min(t)+p
