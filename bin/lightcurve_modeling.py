@@ -133,15 +133,15 @@ def basic_model(t,pars,grid='default'):
 
 def myprior(cube, ndim, nparams):
 
-        cube[0] = cube[0]*1.0 + 0.0 #radius wd1
-        cube[1] = cube[1]*1.0 + 0.0 #radius wd2
-        cube[2] = cube[2]*1.0 + 0.0 #surface gravity
-        cube[3] = cube[3]*(imax-imin) + imin #inclination
-        cube[4] = cube[4]*(tmax-tmin) + tmin #phase
-        cube[5] = cube[5]*4.0 - 2.0 #scale?
-        cube[6] = cube[6]*10.0 #heat?
-        cube[7] = cube[7]*1.0 + 0.0 #mass ratio
-        cube[8] = cube[8]*(pmax-pmin) + pmin #period
+        cube[0] = cube[0]*1.0 + 0.0
+        cube[1] = cube[1]*1.0 + 0.0
+        cube[2] = cube[2]*1.0 + 0.0
+        cube[3] = cube[3]*(imax-imin) + imin
+        cube[4] = cube[4]*(tmax-tmin) + tmin
+        cube[5] = cube[5]*4.0 - 2.0
+        cube[6] = cube[6]*10.0
+        cube[7] = cube[7]*1.0 + 0.0
+        cube[8] = cube[8]*(pmax-pmin) + pmin
 
 def myloglike(cube, ndim, nparams):
     r1 = cube[0]
@@ -172,13 +172,77 @@ def myloglike(cube, ndim, nparams):
     print(prob)
     return prob
 
-plotDir = 'plots_noneclipsing'
+Msun = 4.9169e-6 # mass of sun in s
+pc = 3.0856775807e16 # parsec in m
+c = 299792458 # m/s
+kpc = 1e3*pc # kiloparsec in m
+
+def chirp_mass(f,fdot,A):
+    '''
+    returns the chirp mass in solar masses
+    '''
+    Mc =  (fdot*f**(-11.0/3.0) * (5.0/96.0) * np.pi**(-8.0/3.0))**(3.0/5.0) / Msun
+    return Mc
+
+'''
+old code for correctness
+//Chirpmass
+  double Mc = pow( fdot*pow(f,-11./3.)*(5./96.)*pow(M_PI,-8./3.)  ,  3./5.)/MSUN;
+  printf("Mc = %g \n",Mc);
+  //Distance
+  double DL = ((5./48.)*(fdot/(M_PI*M_PI*f*f*f*A))*C/PC); //seconds
+  printf("dL = %g \n",DL);
+'''
+def luminosity_distance(f,fdot,A):
+    '''
+    return the luminosity distance in s
+    '''
+
+    dl = (5.0/48.0)*(fdot/(np.pi**2 * f**3 * A)) * c / pc
+    return dl
+
+def amplitude(f,fdot,dl):
+    '''
+    return the amplitude in ??? units
+    '''
+    A = (5.0/48.0)*(fdot/(np.pi**2 * f**3 * dl)) * c / pc
+    return A
+
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
+
+    parser.add_option("-d","--dataDir",default="../data")
+    parser.add_option("-p","--plotDir",default="../plots")
+
+    parser.add_option("-c","--chains",default="/home/michael.coughlin/ZTF/ldasoft/post/eclipsing/chains/dimension_chain.dat.1")
+
+    parser.add_option("--doKDE",  action="store_true", default=False)
+    parser.add_option("--inclination",default=60.0,type=float)
+
+    opts, args = parser.parse_args()
+
+    return opts
+
+# Parse command line
+opts = parse_commandline()
+
+if opts.doKDE:
+    plotDir = os.path.join(opts.plotDir,'%d'%opts.inclination,'kde')
+else:
+    plotDir = os.path.join(opts.plotDir,'%d'%opts.inclination,'nokde')
+
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
-filename = '../samples/eclipsing-dimension_chain.dat.1'
+filename = opts.chains
 data_out = np.loadtxt(filename)
 labels = ['$f_{GW} (1/s)$','$\dot{f}_{GW}$','amplitude','$\cos$(colatitude)','longitude','cos(inc)','psi','phi']
+
+mc = chirp_mass(data_out[:,0],data_out[:,1],data_out[:,2]) # mc
+dL = luminosity_distance(data_out[:,0],data_out[:,1],data_out[:,2]) # pc
 
 idx = [0,1,2,5,6,7]
 data_out = data_out[:,idx]
@@ -196,7 +260,7 @@ plt.close()
 
 idx = [0,3]
 pts =  data_out[:,idx]
-pts[:,0] = (2.0/pts[:,0])/86400.0
+pts[:,0] = (1.0/pts[:,0])/86400.0
 pts[:,1] = np.arccos(pts[:,1])*360.0/(2*np.pi)
 
 pmin, pmax = np.min(pts[:,0]), np.max(pts[:,0])
@@ -205,10 +269,10 @@ imin, imax = np.min(pts[:,1]), np.max(pts[:,1])
 kdedir = greedy_kde_areas_2d(pts)
 kdedir_pts = copy.deepcopy(kdedir)
 
-lightcurveFile = '../data/JulyChimeraBJD.csv'
+lightcurveFile = os.path.join(opts.dataDir,'JulyChimeraBJD.csv')
 errorbudget = 0.1
 
-data = np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
+data=np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
 data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
 
@@ -219,7 +283,7 @@ t=data[:,0]
 r1 = 0.125
 r2 = 0.3
 J = 1/15.0
-i = 60
+i = opts.inclination
 t0 = t[0]
 p = 0.004800824101665522
 scale = np.median(y)/1.3
@@ -286,3 +350,26 @@ figure = corner.corner(data[:,:-1], labels=labels,
 figure.set_size_inches(18.0,18.0)
 plt.savefig(plotName)
 plt.close()
+
+# generate the test light curve given parameters
+model_pars = [r1,r2,J,i,t0,scale,heat_2,q,p] # the parameters
+
+tmin, tmax = np.min(t), np.max(t)
+tmin, tmax = np.min(t), np.min(t)+p
+
+plotName = "%s/lc.pdf"%(plotDir)
+
+plt.figure(figsize=(12,8))
+# lets have a look:
+plt.errorbar(lc[:,0],lc[:,1],lc[:,2],fmt='k.')
+plt.ylim([-0.05,0.05])
+plt.xlim([2458306.73899359, 2458306.73899359+0.1])
+plt.ylabel('flux')
+plt.xlabel('time')
+# my initial guess (r1,r2,J,i,t0,p,scale)
+guess = model_pars
+plt.plot(t[:],basic_model(t[:],model_pars),zorder=4)
+plt.show()
+plt.savefig(plotName)
+plt.close()
+
