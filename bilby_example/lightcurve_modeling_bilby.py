@@ -4,14 +4,56 @@ import ellc
 import numpy as np
 
 import bilby
-from bilby.core.prior import Uniform
+from bilby.core.prior import Uniform, Normal
 import matplotlib.pyplot as plt
+import scipy.stats
 
 
 Msun = 4.9169e-6  # mass of sun in s
 pc = 3.0856775807e16  # parsec in m
 c = 299792458  # m/s
 kpc = 1e3 * pc  # kiloparsec in m
+
+
+class SamplesPrior(bilby.core.prior.Prior):
+    def __init__(self, samples, name):
+        self.name = name
+        self.samples = samples
+        self.latex_label = self.name.replace('_', '-')
+        self.minimum = samples.min()
+        self.maximum = samples.max()
+        self.unit = ''
+        self._boundary = None
+        self._is_fixed = False
+
+    def rescale(self, val):
+        return np.random.choice(self.samples)
+
+    def __repr__(self):
+        return "Samples prior"
+
+
+class KDEPrior(bilby.core.prior.Prior):
+    def __init__(self, samples, name):
+        self.name = name
+        self.samples = samples
+        self.kde = scipy.stats.gaussian_kde(samples)
+        self.latex_label = self.name.replace('_', '-')
+        self.minimum = samples.min()
+        self.maximum = samples.max()
+        self.unit = ''
+        self._boundary = None
+        self._is_fixed = False
+
+    def rescale(self, val):
+        return self.kde.resample()
+
+    def sample(self, size=1):
+        return self.kde.resample(size=size)
+
+    def prob(self, val):
+        print(val, self.kde.pdf(val))
+        return self.kde.pdf(val)
 
 
 class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
@@ -120,17 +162,17 @@ def basic_model(t, radius_1, radius_2, sbratio, incl, t_zero, q, period,
 
 parser = optparse.OptionParser()
 parser.add_option("-d", "--dataDir", default="../data")
-parser.add_option("-p", "--plotDir", default="../plots")
+parser.add_option("-p", "--outdir", default="outdir")
 parser.add_option("-c", "--chains")
-parser.add_option("--doKDE", action="store_true", default=False)
+parser.add_option("--prior", choices=["EM", "GW"], default="EM")
 parser.add_option("--inclination", default=60.0, type=float)
 opts, args = parser.parse_args()
 
+label = "{}_{}".format(opts.inclination, opts.prior)
+outdir = "{}_{}".format(opts.outdir, label)
 
-rundir = "{}_{}_{}".format(opts.plotDir, opts.inclination, ["nokde", "kde"][opts.doKDE])
-
-if not os.path.isdir(rundir):
-    os.makedirs(rundir)
+if not os.path.isdir(outdir):
+    os.makedirs(outdir)
 
 filename = opts.chains
 data_out = np.loadtxt(filename)
@@ -140,30 +182,35 @@ pts = data_out[:, :]
 period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
 inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
 
+# Read in lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(opts.dataDir, 'JulyChimeraBJD.csv')
 errorbudget = 0.1
-
 data = np.loadtxt(lightcurveFile, skiprows=1, delimiter=' ')
 data[:, 4] = np.abs(data[:, 4])
-
 y=data[:, 3] / np.max(data[:, 3])
 dy=np.sqrt(data[:, 4]**2 + errorbudget**2) / np.max(data[:, 3])
 t=data[:, 0]
 
+# Sort the data
 idxs = np.argsort(t)
 time = t[idxs]
 ydata = y[idxs]
 
+nthin = 9
+ydata = ydata[::nthin]
+time = time[::nthin]
+dy = dy[::nthin]
+
+# Set up the parameters for an injection
 injection_parameters = dict(
     radius_1=0.125, radius_2=0.3, sbratio=1 / 15.0, incl=opts.inclination,
-    t_zero=time[0], q=0.4, period=0.004800824101665522,
+    t_zero=time[0], q=0.4, period=np.mean(period_prior_vals),
     scale_factor=np.median(y) / 1.3, heat_2=5)
 
+# Evaluate the injection data
 ydata = basic_model(time, **injection_parameters)
 
-tmin, tmax = np.min(t), np.max(t)
-tmin, tmax = np.min(t), np.min(t) + injection_parameters["period"]
-
+# Generate a plot of the data
 plt.figure(figsize=(12, 8))
 plt.ylim([-0.05, 0.05])
 plt.xlim([2458306.73899359, 2458306.73899359 + 0.1])
@@ -171,19 +218,25 @@ plt.ylabel('flux')
 plt.xlabel('time')
 plt.plot(time, basic_model(time, **injection_parameters), zorder=4)
 plt.errorbar(time, basic_model(time, **injection_parameters), dy)
-plotName = "{}/lc.png".format(rundir)
+plotName = "{}/lc.png".format(outdir)
 plt.savefig(plotName)
 plt.close()
 
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 priors = bilby.core.prior.PriorDict()
 priors.update(injection_parameters)
-priors["incl"] = Uniform(0, 90, "incl")
+priors["q"] = Uniform(0.125, 1, "q")
 p = injection_parameters["period"]
-priors["period"] = Uniform(p - 0.1 * p, p + 0.1 * p, "period")
+
+if opts.prior == "EM":
+    priors["incl"] = Uniform(0, 90, "incl")
+    priors["period"] = Uniform(p - 5e-6, p + 5e-6, "period")
+elif opts.prior == "GW":
+    priors["incl"] = Normal(opts.inclination, 3, "incl")
+    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
 
 result = bilby.run_sampler(
-    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=100,
-    dlogz=0.5, sample="unif", injection_parameters=injection_parameters,
-    outdir=rundir, label="TEST")
-result.plot_corner()
+    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=2000,
+    dlogz=0.5, injection_parameters=injection_parameters,
+    outdir=outdir, label=label)
+result.plot_corner(priors=True)
