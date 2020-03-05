@@ -132,16 +132,16 @@ def basic_model(t,pars,grid='default'):
     return m
 
 def myprior(cube, ndim, nparams):
-
-        cube[0] = cube[0]*1.0 + 0.0
-        cube[1] = cube[1]*1.0 + 0.0
-        cube[2] = cube[2]*1.0 + 0.0
-        cube[3] = cube[3]*(imax-imin) + imin
-        cube[4] = cube[4]*(tmax-tmin) + tmin
-        cube[5] = cube[5]*4.0 - 2.0
-        cube[6] = cube[6]*10.0
-        cube[7] = cube[7]*1.0 + 0.0
-        cube[8] = cube[8]*(pmax-pmin) + pmin
+        
+        cube[0] = cube[0]*0.0125 + 0.125-0.125/10
+        cube[1] = cube[1]*0.03 + 0.3-0.3/10
+        cube[2] = cube[2]*0.1/15.0 + 1/15.0/2-1/15.0/10
+        cube[3] = cube[3]*opts.inclination/10 + opts.inclination-opts.inclination/10
+        cube[4] = cube[4]*t[0]/10 + t[0]-t[0]/10
+        cube[5] = cube[5]*np.median(y)/1.3/10 + np.median(y)/1.3-np.median(y)/1.3/10
+        cube[6] = cube[6]*0.5 +  5-0.5
+        cube[7] = cube[7]*0.04 + 0.4-0.04
+        cube[8] = cube[8]*0.004800824101665522/10 + 0.004800824101665522-0.004800824101665522/10
 
 def myloglike(cube, ndim, nparams):
     r1 = cube[0]
