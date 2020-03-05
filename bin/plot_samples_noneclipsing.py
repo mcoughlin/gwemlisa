@@ -176,7 +176,7 @@ plotDir = 'plots_noneclipsing'
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
-filename = '/home/michael.coughlin/ZTF/ldasoft/post/noneclipsing/chains/dimension_chain.dat.1'
+filename = '../ldasoft/post/noneclipsing/chains/dimension_chain.dat.1'
 data_out = np.loadtxt(filename)
 labels = ['$f_{GW} (1/s)$','$\dot{f}_{GW}$','amplitude','$\cos$(colatitude)','longitude','cos(inc)','psi','phi']
 
