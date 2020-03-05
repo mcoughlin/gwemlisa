@@ -32,8 +32,8 @@ def greedy_kde_areas_2d(pts):
     pts = np.linalg.solve(L, (pts - mu).T).T
 
     Npts = pts.shape[0]
-    kde_pts = pts[:Npts/2, :]
-    den_pts = pts[Npts/2:, :]
+    kde_pts = pts[:int(Npts/2), :]
+    den_pts = pts[int(Npts/2):, :]
 
     kde = ss.gaussian_kde(kde_pts.T)
 
@@ -50,8 +50,8 @@ def greedy_kde_areas_1d(pts):
     mu = np.mean(pts, axis=0)
 
     Npts = pts.shape[0]
-    kde_pts = pts[:Npts/2]
-    den_pts = pts[Npts/2:]
+    kde_pts = pts[:int(Npts/2)]
+    den_pts = pts[int(Npts/2):]
 
     kde = ss.gaussian_kde(kde_pts.T)
 
