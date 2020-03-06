@@ -1,20 +1,23 @@
+import argparse
 import os
-import optparse
-import ellc
-import numpy as np
 
 import bilby
 from bilby.core.prior import Uniform, Normal
-import matplotlib.pyplot as plt
+import numpy as np
 import scipy.stats
 
-
-Msun = 4.9169e-6  # mass of sun in s
-pc = 3.0856775807e16  # parsec in m
-c = 299792458  # m/s
-kpc = 1e3 * pc  # kiloparsec in m
+from common import basic_model, DEFAULT_INJECTION_PARAMETERS
 
 
+def get_value_from_filename(key, filename):
+    """ Read in the meta-data from the lightcurve file naming convention """
+    filename = os.path.splitext(os.path.basename(filename))[0]
+    for item in filename.split("_"):
+        if key in item:
+            return float(item.replace(key, ""))
+
+
+# Ignore these: they may become useful when we use the GW prior
 class SamplesPrior(bilby.core.prior.Prior):
     def __init__(self, samples, name):
         self.name = name
@@ -56,6 +59,7 @@ class KDEPrior(bilby.core.prior.Prior):
         return self.kde.pdf(val)
 
 
+# This defines the Gaussian likelihood we are going to use
 class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
     def __init__(self, x, y, func, sigma=None):
         """
@@ -117,128 +121,69 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
             raise ValueError('Sigma must be either float or array-like x.')
 
 
-def basic_model(t, radius_1, radius_2, sbratio, incl, t_zero, q, period,
-                heat_2, scale_factor):
-    """ A function which returns model values at times t for parameters pars
-
-    input:
-        t    a 1D array with times
-        pars a 1D array with parameter values; r1,r2,J,i,t0,p
-
-    output:
-        m    a 1D array with model values at times t
-
-    """
-    grid = "very_sparse"
-    try:
-        m = ellc.lc(
-            t_obs=t,
-            radius_1=radius_1,
-            radius_2=radius_2,
-            sbratio=sbratio,
-            incl=incl,
-            t_zero=t_zero,
-            q=q,
-            period=period,
-            shape_1='sphere',
-            shape_2='roche',
-            ldc_1=0.2,
-            ldc_2=0.4548,
-            gdc_2=0.61,
-            f_c=0,
-            f_s=0,
-            t_exp=3.0 / 86400,
-            grid_1=grid,
-            grid_2=grid,
-            heat_2=heat_2,
-            exact_grav=False,
-            verbose=0)
-        m *= scale_factor
-    except:
-        return t * 10**99
-
-    return m
+def add_gw_prior(args, prior):
+    """ Adds a GW-prior, this is not yet complete """
+    filename = args.gw_chain
+    data_out = np.loadtxt(filename)
+    idx = [0, 1, 2, 5, 6, 7]
+    data_out = data_out[:, idx]
+    pts = data_out[:, :]
+    period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
+    inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
+    priors["incl"] = Normal(args.inclination, 3, "incl")
+    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+    return priors
 
 
-parser = optparse.OptionParser()
-parser.add_option("-d", "--dataDir", default="../data")
-parser.add_option("-p", "--outdir", default="outdir")
-parser.add_option("-c", "--chains")
-parser.add_option("--prior", choices=["EM", "GW"], default="EM")
-parser.add_option("--inclination", default=60.0, type=float)
-opts, args = parser.parse_args()
+# Set up the argument parser
+parser = argparse.ArgumentParser()
+parser.add_argument("-o", "--outdir", default="outdir", help="Path to the ouput directory")
+parser.add_argument("-l", "--lightcurve", type=str)
+parser.add_argument("--nthin", default=10, type=int)
+parser.add_argument("--gw-chain", help="GW chain file to use for prior")
+args = parser.parse_args()
 
-label = "{}_{}".format(opts.inclination, opts.prior)
-outdir = "{}_{}".format(opts.outdir, label)
-
-if not os.path.isdir(outdir):
-    os.makedirs(outdir)
-
-filename = opts.chains
-data_out = np.loadtxt(filename)
-idx = [0, 1, 2, 5, 6, 7]
-data_out = data_out[:, idx]
-pts = data_out[:, :]
-period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
-inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
+# The output directory is based on the input lightcurve
+outdir = "outdir_{}".format(os.path.basename(args.lightcurve.rstrip('.dat')))
 
 # Read in lightcurve to get the typical time and uncertainties
-lightcurveFile = os.path.join(opts.dataDir, 'JulyChimeraBJD.csv')
-errorbudget = 0.1
-data = np.loadtxt(lightcurveFile, skiprows=1, delimiter=' ')
-data[:, 4] = np.abs(data[:, 4])
-y=data[:, 3] / np.max(data[:, 3])
-dy=np.sqrt(data[:, 4]**2 + errorbudget**2) / np.max(data[:, 3])
-t=data[:, 0]
+data= np.genfromtxt(args.lightcurve, names=True)
 
-# Sort the data
-idxs = np.argsort(t)
-time = t[idxs]
-ydata = y[idxs]
+# Get some values based on the lightcurve filename
+injection_read_in = {
+    key: get_value_from_filename(key, args.lightcurve) for key in ["period", "t-zero"]}
 
-nthin = 9
-ydata = ydata[::nthin]
-time = time[::nthin]
-dy = dy[::nthin]
+# Apply thinning (speed up the calculation)
+time = data["MJD"][::args.nthin]
+ydata = data["flux"][::args.nthin]
+dy = data["flux_uncertainty"][::args.nthin]
 
-# Set up the parameters for an injection
-injection_parameters = dict(
-    radius_1=0.125, radius_2=0.3, sbratio=1 / 15.0, incl=opts.inclination,
-    t_zero=time[0], q=0.4, period=np.mean(period_prior_vals),
-    scale_factor=np.median(y) / 1.3, heat_2=5)
-
-# Evaluate the injection data
-ydata = basic_model(time, **injection_parameters)
-
-# Generate a plot of the data
-plt.figure(figsize=(12, 8))
-plt.ylim([-0.05, 0.05])
-plt.xlim([2458306.73899359, 2458306.73899359 + 0.1])
-plt.ylabel('flux')
-plt.xlabel('time')
-plt.plot(time, basic_model(time, **injection_parameters), zorder=4)
-plt.errorbar(time, basic_model(time, **injection_parameters), dy)
-plotName = "{}/lc.png".format(outdir)
-plt.savefig(plotName)
-plt.close()
-
+# Set up the likelihood
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
+
+# Set up the priors
 priors = bilby.core.prior.PriorDict()
-priors.update(injection_parameters)
+priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.125, 1, "q")
 priors["radius_1"] = Uniform(0, 1, "radius_1")
 priors["radius_2"] = Uniform(0, 1, "radius_2")
-p = injection_parameters["period"]
+priors["t_zero"] = Uniform(
+    injection_read_in["t-zero"] - injection_read_in["period"] / 2,
+    injection_read_in["t-zero"] + injection_read_in["period"] / 2,
+    "t_zero")
+priors["scale_factor"] = Uniform(0, np.max(ydata))
 
-if opts.prior == "EM":
+# If we want a GW-based prior, set it up, else use the EM prior
+if args.gw_chain is None:
     priors["incl"] = Uniform(0, 90, "incl")
-    priors["period"] = Uniform(p - 5e-6, p + 5e-6, "period")
-elif opts.prior == "GW":
-    priors["incl"] = Normal(opts.inclination, 3, "incl")
-    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+    priors["period"] = Normal(injection_read_in["period"], 1e-5, "period")
+    label = "EM-prior"
+else:
+    priors = add_gw_prior(args, priors)
+    label = "GW-prior"
 
+meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(
-    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=1000,
-    dlogz=0.5, injection_parameters=injection_parameters,
-    outdir=outdir, label=label)
+    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=200,
+    outdir=outdir, label=label, meta_data=meta_data, resume=False)
 result.plot_corner(priors=True)
