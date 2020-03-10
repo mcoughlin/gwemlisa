@@ -29,7 +29,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label based on the relevant injection parameters
-label = "data_incl{}_period{}_t-zero{}".format(
+label = "data_incl{}_period{:1.3g}_t-zero{:1.3g}".format(
     args.incl, args.period, args.t_zero)
 
 # Read in real lightcurve to get the typical time and uncertainties

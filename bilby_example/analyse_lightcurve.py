@@ -6,7 +6,7 @@ from bilby.core.prior import Uniform, Normal
 import numpy as np
 import scipy.stats
 
-from common import basic_model, DEFAULT_INJECTION_PARAMETERS
+from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
 def get_value_from_filename(key, filename):
@@ -60,67 +60,6 @@ class KDEPrior(bilby.core.prior.Prior):
 
 
 # This defines the Gaussian likelihood we are going to use
-class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
-    def __init__(self, x, y, func, sigma=None):
-        """
-        A general Gaussian likelihood for known or unknown noise - the model
-        parameters are inferred from the arguments of function
-
-        Parameters
-        ----------
-        x, y: array_like
-            The data to analyse
-        func:
-            The python function to fit to the data. Note, this must take the
-            dependent variable as its first argument. The other arguments
-            will require a prior and will be sampled over (unless a fixed
-            value is given).
-        sigma: None, float, array_like
-            If None, the standard deviation of the noise is unknown and will be
-            estimated (note: this requires a prior to be given for sigma). If
-            not None, this defines the standard-deviation of the data points.
-            This can either be a single float, or an array with length equal
-            to that for `x` and `y`.
-        """
-
-        super(GaussianLikelihood, self).__init__(x=x, y=y, func=func)
-        self.sigma = sigma
-
-        # Check if sigma was provided, if not it is a parameter
-        if self.sigma is None:
-            self.parameters['sigma'] = None
-
-    def log_likelihood(self):
-        log_l = np.sum(- (self.residual / self.sigma)**2 / 2 -
-                       np.log(2 * np.pi * self.sigma**2) / 2)
-        return np.nan_to_num(log_l)
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(x={}, y={}, func={}, sigma={})' \
-            .format(self.x, self.y, self.func.__name__, self.sigma)
-
-    @property
-    def sigma(self):
-        """
-        This checks if sigma has been set in parameters. If so, that value
-        will be used. Otherwise, the attribute sigma is used. The logic is
-        that if sigma is not in parameters the attribute is used which was
-        given at init (i.e. the known sigma as either a float or array).
-        """
-        return self.parameters.get('sigma', self._sigma)
-
-    @sigma.setter
-    def sigma(self, sigma):
-        if sigma is None:
-            self._sigma = sigma
-        elif isinstance(sigma, float) or isinstance(sigma, int):
-            self._sigma = sigma
-        elif len(sigma) == self.n:
-            self._sigma = sigma
-        else:
-            raise ValueError('Sigma must be either float or array-like x.')
-
-
 def add_gw_prior(args, prior):
     """ Adds a GW-prior, this is not yet complete """
     filename = args.gw_chain
@@ -137,26 +76,42 @@ def add_gw_prior(args, prior):
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outdir", default="outdir", help="Path to the ouput directory")
+parser.add_argument("-o", "--outdir", default=None, help="Path to the ouput directory")
 parser.add_argument("-l", "--lightcurve", type=str)
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
 args = parser.parse_args()
 
+label = os.path.basename(args.lightcurve.rstrip('.dat'))
+
 # The output directory is based on the input lightcurve
-outdir = "outdir_{}".format(os.path.basename(args.lightcurve.rstrip('.dat')))
+if args.outdir is None:
+    args.outdir = "outdir_{}".format(label)
+
 
 # Read in lightcurve to get the typical time and uncertainties
-data= np.genfromtxt(args.lightcurve, names=True)
+if "csv" in args.lightcurve:
+    data = np.loadtxt(args.lightcurve)
+    time = data[::args.nthin, 0]
+    ydata = data[::args.nthin, -2]
+    dy = data[::args.nthin, -1]
+else:
+    data= np.genfromtxt(args.lightcurve, names=True)
+    time = data["MJD"][::args.nthin]
+    ydata = data["flux"][::args.nthin]
+    dy = data["flux_uncertainty"][::args.nthin]
 
 # Get some values based on the lightcurve filename
 injection_read_in = {
     key: get_value_from_filename(key, args.lightcurve) for key in ["period", "t-zero"]}
 
+if injection_read_in["period"] is None:
+    period = 0.004800824101665522
+    injection_read_in["t-zero"] = time[0]
+    injection_read_in["period"] = period
+
+
 # Apply thinning (speed up the calculation)
-time = data["MJD"][::args.nthin]
-ydata = data["flux"][::args.nthin]
-dy = data["flux_uncertainty"][::args.nthin]
 
 # Set up the likelihood
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
@@ -167,23 +122,28 @@ priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if 
 priors["q"] = Uniform(0.125, 1, "q")
 priors["radius_1"] = Uniform(0, 1, "radius_1")
 priors["radius_2"] = Uniform(0, 1, "radius_2")
+priors["sbratio"] = Uniform(0, 1, "sbratio")
+priors["heat2"] = Uniform(0, 10, "heat2")
+priors["ldc_1"] = Uniform(0, 1, "ldc_1")
+priors["ldc_2"] = Uniform(0, 1, "ldc_2")
+priors["gdc_2"] = Uniform(0, 1, "gdc_2")
 priors["t_zero"] = Uniform(
     injection_read_in["t-zero"] - injection_read_in["period"] / 2,
     injection_read_in["t-zero"] + injection_read_in["period"] / 2,
     "t_zero")
-priors["scale_factor"] = Uniform(0, np.max(ydata))
+priors["scale_factor"] = Uniform(0, np.max(ydata), "scale_factor")
 
 # If we want a GW-based prior, set it up, else use the EM prior
 if args.gw_chain is None:
     priors["incl"] = Uniform(0, 90, "incl")
     priors["period"] = Normal(injection_read_in["period"], 1e-5, "period")
-    label = "EM-prior"
+    label += "_EM-prior"
 else:
     priors = add_gw_prior(args, priors)
-    label = "GW-prior"
+    label += "_GW-prior"
 
 meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(
-    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=200,
-    outdir=outdir, label=label, meta_data=meta_data, resume=False)
+    likelihood=likelihood, priors=priors, sampler='pymultinest', npoints=1000,
+    outdir=args.outdir, label=label, meta_data=meta_data, resume=False)
 result.plot_corner(priors=True)
