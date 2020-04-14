@@ -1,3 +1,4 @@
+""" Simulate a lightcurve and optionally create a plot """
 import argparse
 import os
 
@@ -12,13 +13,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-o", "--outdir", default="data", help="Path to the ouput directory")
 parser.add_argument(
-    "-i", "--incl", default=60, type=float, help="Inclination")
+    "-l", "--label", default="data", help="Path to the ouput directory")
+parser.add_argument(
+    "-i", "--incl", default=90, type=float, help="Inclination")
 parser.add_argument(
     "--period", default=0.004, type=float, help="period")
 parser.add_argument(
     "--t-zero", default=563041, type=float, help="t-zero")
 parser.add_argument(
-    "-l", "--lightcurve", default="../data/JulyChimeraBJD.csv",
+    "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
     help="Path to the lightcurver file to use for times and uncertainties")
 parser.add_argument(
     "--plot", action="store_true", help="Generate a plot of the data")
@@ -28,12 +31,11 @@ args = parser.parse_args()
 if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
-# Set up a label based on the relevant injection parameters
-label = "data_incl{}_period{:1.3g}_t-zero{:1.3g}".format(
-    args.incl, args.period, args.t_zero)
+# Set up a label
+label = "data_{}".format(args.label)
 
 # Read in real lightcurve to get the typical time and uncertainties
-lightcurveFile = os.path.join(args.lightcurve)
+lightcurveFile = os.path.join(args.err_lightcurve)
 errorbudget = 0.1
 data = np.loadtxt(lightcurveFile, skiprows=1, delimiter=' ')
 data[:, 4] = np.abs(data[:, 4])
