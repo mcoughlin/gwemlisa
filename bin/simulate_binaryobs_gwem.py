@@ -125,3 +125,19 @@ class Observation:
     def phases(self):
         phtimes = (self.obstimes - self.t0)*60*60*24.
         return (phtimes - 1/2*self.binary.fdotem/self.binary.f0*phtimes**2)/(60*60*24.)
+
+def main():
+    print("Creating Binary instance using default 7 min params.")
+    b = Binary()
+    print("Creating Observation instance.")
+    o = Observation(b,numobs=500,mean_dt=10)
+    print("Create eclipse dt and freq table.")
+    data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
+    print(data)
+    np.savetxt("phase_freq.dat",
+               data, 
+               header = 'time(days) eclipse_dt(seconds) gw_freq(hertz)')
+    print("fdot from pdot: %s"%b.fdotem)
+    print("fdot from m1 and m2: %s"%b.fdotgw)
+if __name__== "__main__":
+    main()
