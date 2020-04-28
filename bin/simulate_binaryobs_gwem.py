@@ -6,7 +6,7 @@ msun = 1.989e30 # solar mass (kg)
 c = 299792458 # speed of light (m/s)
 
 class Binary:
-    
+
     def __init__(self,
         m1 = 0.610,
         m2 = 0.210,
@@ -24,7 +24,7 @@ class Binary:
             starting period [days]
         pdot: float
             starting abs rate of change of period
-            
+
         Properties
         ----------
         f0: float
@@ -33,17 +33,17 @@ class Binary:
             starting rate of change of frequency from pdot and p0 [hertz/sec]
         fdotgw: float
             starting rate of change of frequency from m1 and m2 and p0 [hertz/sec]
-        mchirp: float 
+        mchirp: float
             chirp mass [kilograms]
         tcoal: float
             time to coalescence [seconds]
-            
+
         """
         self.m1 = m1
         self.m2 = m2
         self.p0 = p0
         self.pdot = pdot
-        
+
     @property
     def f0(self):
         return 2./self.p0/(60*60*24.)
@@ -54,7 +54,7 @@ class Binary:
     def fdotgw(self):
         return 96./5. * np.pi * (G*np.pi*self.mchirp)**(5/3.)/c**5*self.f0**(11/3.)
     @property
-    def mchirp(self): 
+    def mchirp(self):
         return (self.m1*self.m2)**(3/5.)/(self.m1+self.m2)**(1/5.)*msun
     @property
     def tcoal(self):
@@ -77,7 +77,7 @@ class Observation:
         binary: Binary
             binary object being observed
         obstimes: float array
-            array with observation times [days]. 
+            array with observation times [days].
             If specified, all other observation parameters are ignored.
         t0: float
             starting time of observations [days]
@@ -87,15 +87,16 @@ class Observation:
             average dt between each observation time [days]
         std_dt: float
             standard deviation of the observation times [days]
-            
+
         Methods
         ----------
         freqs: float array
             frequencies at the times of observation. Obtained through m1, m2 and p0 [hertz]
         phases: float array
-            times of eclipses. Assumes starting time to be zero.
-            Obtained through taylor expansion of p0 and pdot [days]
-            
+            times of eclipses. Assumes starting time to be zero if, fdot not specified,
+            default is from m1, m2 and f0, assuming gravitational wave radiation.
+            Obtained through taylor expansion up to second order. [days]
+
         """
 
         self.binary = binary
@@ -104,7 +105,7 @@ class Observation:
             t[0] = t0
             for i in range(len(t)):
                 if i != 0:
-                    t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt,1)) 
+                    t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt,1))
             self.obstimes = t
             self.t0 = t0
             self.numobs = numobs
@@ -120,24 +121,40 @@ class Observation:
     def freqs(self):
         tcoal = self.binary.tcoal
         tau = tcoal - self.obstimes*60*60*24.
-        return 1/np.pi*(5/256./tau)**(3/8.)*(G*self.binary.mchirp/c**3)**(-5/8.) 
-    
-    def phases(self):
+        return 1/np.pi*(5/256./tau)**(3/8.)*(G*self.binary.mchirp/c**3)**(-5/8.)
+
+    def phases(self, fdot = None):
+        if fdot is None:
+            fdot = self.binary.fdotgw
         phtimes = (self.obstimes - self.t0)*60*60*24.
-        return (phtimes - 1/2*self.binary.fdotem/self.binary.f0*phtimes**2)/(60*60*24.)
+        return (phtimes - 1/2*fdot/self.binary.f0*phtimes**2)/(60*60*24.)
 
 def main():
-    print("Creating Binary instance using default 7 min params.")
+    print("Creating Binary instance using default 7 min binary params.")
     b = Binary()
     print("Creating Observation instance.")
-    o = Observation(b,numobs=500,mean_dt=10)
+    o = Observation(b, numobs=1000, mean_dt=10)
     print("Create eclipse dt and freq table.")
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
     print(data)
+
+    #Plotting
+    import matplotlib.pyplot as plt
+    plt.plot(o.obstimes,(o.phases()-o.obstimes)%(-b.p0)*60*24,label='using fdotgw mod starting orbital period')
+    plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)%(-b.p0)*60*24,label='using fdotem mod starting orbital period')
+    plt.plot(o.obstimes,(o.phases()-o.obstimes)*60*24,label='using fdotgw')
+    plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)*60*24,label='using fdotem')
+    plt.ylabel('eclipse_dt [minutes]')
+    plt.xlabel('time of observation [days]')
+    plt.legend()
+    plt.savefig("eclipsedt_vs_time.pdf")
+    plt.show()
+
     np.savetxt("phase_freq.dat",
-               data, 
+               data,
                header = 'time(days) eclipse_dt(seconds) gw_freq(hertz)')
     print("fdot from pdot: %s"%b.fdotem)
     print("fdot from m1 and m2: %s"%b.fdotgw)
+
 if __name__== "__main__":
     main()
