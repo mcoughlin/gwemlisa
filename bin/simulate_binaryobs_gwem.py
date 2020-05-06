@@ -138,17 +138,18 @@ def main():
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
     print(data)
 
-    #Plotting
-    import matplotlib.pyplot as plt
-    plt.plot(o.obstimes,(o.phases()-o.obstimes)%(-b.p0)*60*24,label='using fdotgw mod starting orbital period')
-    plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)%(-b.p0)*60*24,label='using fdotem mod starting orbital period')
-    plt.plot(o.obstimes,(o.phases()-o.obstimes)*60*24,label='using fdotgw')
-    plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)*60*24,label='using fdotem')
-    plt.ylabel('eclipse_dt [minutes]')
-    plt.xlabel('time of observation [days]')
-    plt.legend()
-    plt.savefig("eclipsedt_vs_time.pdf")
-    plt.show()
+    Plotting = False
+    if Plotting:
+        import matplotlib.pyplot as plt
+        plt.plot(o.obstimes,(o.phases()-o.obstimes)%(-b.p0)*60*24,label='using fdotgw mod starting orbital period')
+        plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)%(-b.p0)*60*24,label='using fdotem mod starting orbital period')
+        plt.plot(o.obstimes,(o.phases()-o.obstimes)*60*24,label='using fdotgw')
+        plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)*60*24,label='using fdotem')
+        plt.ylabel('eclipse_dt [minutes]')
+        plt.xlabel('time of observation [days]')
+        plt.legend()
+        plt.savefig("eclipsedt_vs_time.pdf")
+        plt.show()
 
     np.savetxt("phase_freq.dat",
                data,
