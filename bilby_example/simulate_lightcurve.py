@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-o", "--outdir", default="data", help="Path to the ouput directory")
 parser.add_argument(
-    "-l", "--label", default="data", help="Path to the ouput directory")
+    "-l", "--label", default="label", help="A lebel for the ouput")
 parser.add_argument(
     "-i", "--incl", default=90, type=float, help="Inclination")
 parser.add_argument(
@@ -21,8 +21,10 @@ parser.add_argument(
 parser.add_argument(
     "--t-zero", default=563041, type=float, help="t-zero")
 parser.add_argument(
+    "-m", "--error-multiplier", default=1)
+parser.add_argument(
     "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
-    help="Path to the lightcurver file to use for times and uncertainties")
+    help="Path to the lightcurve file to use for times and uncertainties")
 parser.add_argument(
     "--plot", action="store_true", help="Generate a plot of the data")
 args = parser.parse_args()
@@ -32,7 +34,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label
-label = "data_{}".format(args.label)
+label = "data_{}_{}_{}".format(args.label, args.incl, args.error_multiplier)
 
 # Read in real lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(args.err_lightcurve)
@@ -40,7 +42,7 @@ errorbudget = 0.1
 data = np.loadtxt(lightcurveFile, skiprows=1, delimiter=' ')
 data[:, 4] = np.abs(data[:, 4])
 y=data[:, 3] / np.max(data[:, 3])
-dy=np.sqrt(data[:, 4]**2 + errorbudget**2) / np.max(data[:, 3])
+dy= float(args.error_multiplier) * np.sqrt(data[:, 4]**2 + errorbudget**2) / np.max(data[:, 3])
 t=data[:, 0]
 
 # Shift the times so that the mid-point is equal to the t-zero passed in the CL
