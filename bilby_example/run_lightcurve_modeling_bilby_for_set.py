@@ -27,7 +27,7 @@ for ii, row in enumerate(data):
         cmd += "--plot"
     subprocess.run([cmd], shell=True)
 
-    file = f"{args.outdir}/data_row{ii}.dat"
+    file = f"{args.outdir}/data_row{ii}_90.0_1.dat"
     cmd = (
         f"python analyse_lightcurve.py --outdir {args.outdir} --lightcurve {file} "
         f"--t-zero {tzero} --period {period} --incl {args.incl}"
