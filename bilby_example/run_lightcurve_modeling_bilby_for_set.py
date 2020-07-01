@@ -5,8 +5,9 @@ import numpy as np
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="outdir_phase_freq")
-parser.add_argument("--dat", default="phase_freq.dat")
-parser.add_argument("--incl", default=90)
+parser.add_argument("--dat", default="phase_freq_std_dt0.01.dat")
+parser.add_argument("--incl", type=float, default=90.)
+parser.add_argument("-m", "--error-multiplier", default=0.1)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
 args = parser.parse_args()
@@ -21,13 +22,13 @@ for ii, row in enumerate(data):
     cmd = (
         f"python simulate_lightcurve.py --outdir {args.outdir} --incl {args.incl} "
         f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
-        f"../data/JulyChimeraBJD.csv "
+        f"../data/JulyChimeraBJD.csv -m {args.error_multiplier}"
     )
     if args.plot:
         cmd += "--plot"
     subprocess.run([cmd], shell=True)
 
-    file = f"{args.outdir}/data_row{ii}.dat"
+    file = f"{args.outdir}/data_row{ii}_incl{args.incl}_errormultiplier{args.error_multiplier}.dat"
     cmd = (
         f"python analyse_lightcurve.py --outdir {args.outdir} --lightcurve {file} "
         f"--t-zero {tzero} --period {period} --incl {args.incl}"

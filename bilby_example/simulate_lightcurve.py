@@ -21,7 +21,7 @@ parser.add_argument(
 parser.add_argument(
     "--t-zero", default=563041, type=float, help="t-zero")
 parser.add_argument(
-    "-m", "--error-multiplier", default=1)
+    "-m", "--error-multiplier", default=0.1)
 parser.add_argument(
     "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
     help="Path to the lightcurve file to use for times and uncertainties")
@@ -34,7 +34,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label
-label = "data_{}_{}_{}".format(args.label, args.incl, args.error_multiplier)
+label = "data_{}_incl{}_errormultiplier{}".format(args.label, args.incl, args.error_multiplier)
 
 # Read in real lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(args.err_lightcurve)
