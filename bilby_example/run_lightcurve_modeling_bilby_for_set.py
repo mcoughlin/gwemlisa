@@ -20,14 +20,14 @@ for ii, row in enumerate(data):
     tzero = row[0] + row[1] / 86400
     cmd = (
         f"python simulate_lightcurve.py --outdir {args.outdir} --incl {args.incl} "
-        f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
+        f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve -m 0.1 "
         f"../data/JulyChimeraBJD.csv "
     )
     if args.plot:
         cmd += "--plot"
     subprocess.run([cmd], shell=True)
 
-    file = f"{args.outdir}/data_row{ii}_90.0_1.dat"
+    file = f"{args.outdir}/data_row{ii}_90.0_0.1.dat"
     cmd = (
         f"python analyse_lightcurve.py --outdir {args.outdir} --lightcurve {file} "
         f"--t-zero {tzero} --period {period} --incl {args.incl}"
