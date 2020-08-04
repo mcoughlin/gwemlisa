@@ -4,6 +4,7 @@ import os
 import bilby
 from bilby.core.prior import Uniform, Normal
 import numpy as np
+import scipy
 
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
@@ -27,41 +28,54 @@ from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 #         return "Samples prior"
 #
 #
-# class KDEPrior(bilby.core.prior.Prior):
-#     def __init__(self, samples, name):
-#         self.name = name
-#         self.samples = samples
-#         self.kde = scipy.stats.gaussian_kde(samples)
-#         self.latex_label = self.name.replace('_', '-')
-#         self.minimum = samples.min()
-#         self.maximum = samples.max()
-#         self.unit = ''
-#         self._boundary = None
-#         self._is_fixed = False
-#
-#     def rescale(self, val):
-#         return self.kde.resample()
-#
-#     def sample(self, size=1):
-#         return self.kde.resample(size=size)
-#
-#     def prob(self, val):
-#         print(val, self.kde.pdf(val))
-#         return self.kde.pdf(val)
-#
-#
-# def add_gw_prior(args, prior):
-#     """ Adds a GW-prior, this is not yet complete """
-#     filename = args.gw_chain
-#     data_out = np.loadtxt(filename)
-#     idx = [0, 1, 2, 5, 6, 7]
-#     data_out = data_out[:, idx]
-#     pts = data_out[:, :]
-#     period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
-#     # inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
-#     priors["incl"] = Normal(args.inclination, 3, "incl")
-#     priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
-#     return priors
+class KDEPrior(bilby.core.prior.Prior):
+    def __init__(self, samples, name):
+        self.name = name
+        self.samples = samples
+        self.kde = scipy.stats.gaussian_kde(samples)
+        self.latex_label = self.name.replace('_', '-')
+        self.minimum = samples.min()
+        self.maximum = samples.max()
+        self.unit = ''
+        self._boundary = None
+        self._is_fixed = False
+
+    def rescale(self, val):
+        return self.kde.resample()
+
+    def sample(self, size=1):
+        return self.kde.resample(size=size)
+
+    def prob(self, val):
+        return self.kde.pdf(val)
+
+
+def add_gw_prior(args, prior):
+    """ Adds a GW-prior based on the gw_chain file"""
+    # Read in the data file
+    filename = args.gw_chain
+    data_out = np.loadtxt(filename)
+    idx = [0, 1, 2, 5, 6, 7]
+    data_out = data_out[:, idx]
+    pts = data_out[:, :]
+
+    # Extract samples from the GW prior chains
+    # Greg: I'm not 100% about the conversions here
+    period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
+    inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
+
+    # Convert the samples into priors
+
+    # This is using the KDEPrior - I found this to be very slow
+    #priors["incl"] = KDEPrior(inclination_prior_vals, "incl")
+
+    # This is using a normal-prior fitted to the samples (much fsater than KDE)
+    priors["period"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "period")
+
+    # Here I'm using the user-defined period NOT the GW prior because the GW samples are for a different period
+    # priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+    priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
+    return priors
 
 
 # Set up the argument parser
@@ -76,7 +90,7 @@ parser.add_argument(
     "--period", default=0.004, type=float, help="period")
 parser.add_argument(
     "--t-zero", default=563041, type=float, help="t-zero")
-args = parser.parse_args()
+args, _ = parser.parse_known_args()
 
 label = os.path.basename(args.lightcurve.rstrip('.dat'))
 
@@ -120,19 +134,18 @@ priors["t_zero"] = Uniform(
     "t_zero", latex_label="$t_0$")
 
 # If we want a GW-based prior, set it up, else use the EM prior
-if args.gw_chain is None:
+if args.gw_chain:
+    priors = add_gw_prior(args, priors)
+    label += "_GW-prior"
+else:
+    # EM prior
     priors["incl"] = Uniform(0, 90, "incl", latex_label=r"$\iota$")
     priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     label += "_EM-prior"
-else:
-    # Not yet implements
-    # priors = add_gw_prior(args, priors)
-    # label += "_GW-prior"
-    pass
 
 meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=250,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-injection = {key: injection[key] for key in ["t_zero", "period"]}
+injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q']}
 result.plot_corner(parameters=injection, priors=True)
