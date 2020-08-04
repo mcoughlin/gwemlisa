@@ -24,7 +24,7 @@ import corner
 import pymultinest
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--outdir", default="outdir_phase_freq")
+parser.add_argument("--outdir", default="out-emprior")
 parser.add_argument("--dat", default="phase_freq_std_dt0.01.dat")
 parser.add_argument("--incl", type=float, default=90.)
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
@@ -40,7 +40,7 @@ for ii, row in enumerate(data):
         continue
 
     label = f"row{ii}"
-    period = row[2]
+    period = 2 * (1.0 / row[2]) / 86400.0
     tzero = row[0] + row[1] / 86400
 
     filelabel = "data_{}_incl{}_errormultiplier{}".format(label, args.incl,
@@ -75,6 +75,11 @@ for ii, row in enumerate(data):
         t_0.append(row[3])
 
     data_out[ii] = np.array(t_0)
+
+    print('')
+    print('T0 true: %.10f' % (tzero))
+    print('T0 estimated: %.10f' % (np.median(data_out[ii])))
+    print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
 
 # constants (SI units)
 G = 6.67e-11 # grav constant (m^3/kg/s^2)

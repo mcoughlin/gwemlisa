@@ -6,6 +6,8 @@ from bilby.core.prior import Uniform, Normal
 import numpy as np
 import scipy
 
+import matplotlib.pyplot as plt
+
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
@@ -61,7 +63,7 @@ def add_gw_prior(args, prior):
 
     # Extract samples from the GW prior chains
     # Greg: I'm not 100% about the conversions here
-    period_prior_vals = (1.0 / pts[:, 0]) / 86400.0
+    period_prior_vals = 2 * (1.0 / pts[:, 0]) / 86400.0
     inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
 
     # Convert the samples into priors
@@ -70,11 +72,13 @@ def add_gw_prior(args, prior):
     #priors["incl"] = KDEPrior(inclination_prior_vals, "incl")
 
     # This is using a normal-prior fitted to the samples (much fsater than KDE)
-    priors["period"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "period")
+    #priors["incl"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "incl")
+    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl")
 
     # Here I'm using the user-defined period NOT the GW prior because the GW samples are for a different period
-    # priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
-    priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
+    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+
+    #priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     return priors
 
 
