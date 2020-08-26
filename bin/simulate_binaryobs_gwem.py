@@ -131,31 +131,33 @@ class Observation:
 
 def main():
     print("Creating Binary instance using default 7 min binary params.")
-    b = Binary()
-    print("Creating Observation instance.")
-    o = Observation(b, numobs=1000, mean_dt=10)
-    print("Create eclipse dt and freq table.")
-    data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
-    print(data)
+    for m1,m2 in [[0.17,1.4],[0.17,0.17],[1.4,1.4],[0.4,0.7]]:
+        b = Binary(m1=m1,m2=m2)
+        print("Creating Observation instance.")
+        o = Observation(b, numobs=1000, mean_dt=10)
+        #print("Create eclipse dt and freq table.")
+        data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
+        #print(data)
 
-    Plotting = False
-    if Plotting:
-        import matplotlib.pyplot as plt
-        plt.plot(o.obstimes,(o.phases()-o.obstimes)%(-b.p0)*60*24,label='using fdotgw mod starting orbital period')
-        plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)%(-b.p0)*60*24,label='using fdotem mod starting orbital period')
-        plt.plot(o.obstimes,(o.phases()-o.obstimes)*60*24,label='using fdotgw')
-        plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)*60*24,label='using fdotem')
-        plt.ylabel('eclipse_dt [minutes]')
-        plt.xlabel('time of observation [days]')
-        plt.legend()
-        plt.savefig("eclipsedt_vs_time.pdf")
-        plt.show()
+        Plotting = False
+        if Plotting:
+            import matplotlib.pyplot as plt
+            plt.plot(o.obstimes,(o.phases()-o.obstimes)%(-b.p0)*60*24,label='using fdotgw mod starting orbital period')
+            plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)%(-b.p0)*60*24,label='using fdotem mod starting orbital period')
+            plt.plot(o.obstimes,(o.phases()-o.obstimes)*60*24,label='using fdotgw')
+            plt.plot(o.obstimes,(o.phases(b.fdotem)-o.obstimes)*60*24,label='using fdotem')
+            plt.ylabel('eclipse_dt [minutes]')
+            plt.xlabel('time of observation [days]')
+            plt.legend()
+            plt.savefig("eclipsedt_vs_time.pdf")
+            plt.show()
 
-    np.savetxt("phase_freq.dat",
-               data,
-               header = 'time(days) eclipse_dt(seconds) gw_freq(hertz)')
-    print("fdot from pdot: %s"%b.fdotem)
-    print("fdot from m1 and m2: %s"%b.fdotgw)
+        np.savetxt("phase_freq%.1f.dat"%(b.mchirp/msun),
+                   data,
+                   header = 'time(days) eclipse_dt(seconds) gw_freq(hertz)')
+        print("fdot from pdot: %s"%b.fdotem)
+        print("fdot from m1 and m2: %s"%b.fdotgw)
+        print("chirpmass: %s"%(b.mchirp/msun))
 
 if __name__== "__main__":
     main()
