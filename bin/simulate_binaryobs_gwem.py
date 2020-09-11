@@ -5,7 +5,51 @@ G = 6.67e-11 # grav constant (m^3/kg/s^2)
 msun = 1.989e30 # solar mass (kg)
 c = 299792458 # speed of light (m/s)
 
-class Binary:
+class BinaryGW:
+
+    def __init__(self,
+        f0,
+        fdot,
+    ):
+        """
+        A class for representing binaries with gw params in mind.
+
+        Parameters
+        ----------
+        f0: float
+            starting frequency [hertz]
+        fdot: float
+            starting rate of change of frequency [hertz/sec]
+
+        Properties
+        ----------
+        p0: float
+            starting period [days]
+        pdot: float
+            starting abs rate of change of period
+        mchirp: float
+            chirp mass [kilograms]
+        tcoal: float
+            time to coalescence [seconds]
+
+        """
+        self.f0 = p0
+        self.fdot = pdot
+
+    @property
+    def p0(self):
+        return 2./self.f0/(60*60*24.)
+    @property
+    def pdot(self):
+        return 2.*self.fdot/self.p0**2/(60*60*24.)**2
+    @property
+    def mchirp(self):
+        return c**3/G*(5/96.*np.pi**(-8/3.)*f0*(-11/3.)*fdot)**(3/5.)
+    @property
+    def tcoal(self):
+        return 5./256. * (np.pi*self.f0)**(-8/3) * (G*self.mchirp/c**3)**(-5/3)
+
+class BinaryEM:
 
     def __init__(self,
         m1 = 0.610,
@@ -14,7 +58,7 @@ class Binary:
         pdot = 2.373e-11,
     ):
         """
-        A class for representing binaries as with em params in mind and gw properties.
+        A class for representing binaries with em params in mind and gw properties.
 
         Parameters
         ----------
@@ -74,7 +118,7 @@ class Observation:
 
         Parameters
         ----------
-        binary: Binary
+        binary: BinaryEM or BinaryGW
             binary object being observed
         obstimes: float array
             array with observation times [days].
@@ -125,7 +169,10 @@ class Observation:
 
     def phases(self, fdot = None):
         if fdot is None:
-            fdot = self.binary.fdotgw
+            if hastarr(self.binary,'fdotgw'):
+                fdot = self.binary.fdotgw
+            else:
+                fdot = self.binary.fdot
         phtimes = (self.obstimes - self.t0)*60*60*24.
         return (phtimes - 1/2*fdot/self.binary.f0*phtimes**2)/(60*60*24.)
 
