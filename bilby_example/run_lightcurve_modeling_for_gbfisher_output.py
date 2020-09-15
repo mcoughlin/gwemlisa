@@ -23,23 +23,27 @@ import scipy.stats as ss
 import corner
 import pymultinest
 import simulate_binaryobs_gwem as sim
+import glob
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
-parser.add_argument("--dat", default="Binary_Parameters.dat")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
+parser.add_argument("--chainsdir", default="../data/", help = 'Folder in which all subfolders are binaries ran with gbmcmc')
+
 args = parser.parse_args()
 
-binsParams = np.loadtxt(args.dat)
 data_out = {}
+binfolders = glob.glob(args.chainsdir+'/*/')
+for binary in binfolders:
+    binaryname = os.path.basename(os.path.normpath(binary))
+    f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
+#for iii, binParams in enumerate(binsParams):
+#    if iii % args.every != 0:
+#        continue
 
-for iii, binParams in enumerate(binsParams):
-    if iii % args.every != 0:
-        continue
-
-    f, fdot, col, lon, amp, incl, pol, phase = binParams
+#    f, fdot, col, lon, amp, incl, pol, phase = binParams
     incl = incl*180/np.pi
     b = sim.BinaryGW(f,fdot)
     o = sim.Observation(b, numobs=1000, mean_dt=100)
@@ -50,12 +54,14 @@ for iii, binParams in enumerate(binsParams):
         if ii % args.every != 0:
             continue
 
-        label = f"row{ii}"
+        label = f"{binaryname}row{ii}"
+        print(label)
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
 
         filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl,
                                                               args.error_multiplier)
+        filelabel = "d_{}_errm{}".format(label, args.error_multiplier)
         simfile = "{}/{}.dat".format(args.outdir, filelabel)
         if not os.path.isfile(simfile):
             cmd = (
@@ -67,16 +73,16 @@ for iii, binParams in enumerate(binsParams):
                 cmd += " --plot"
             subprocess.run([cmd], shell=True)
 
-        jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label,
-                                                                             incl,
-                                                                             args.error_multiplier)
-        if np.isclose(incl, 90):
-            chainfile = '../samples/eclipsing-dimension_chain.dat.1'
-        elif np.isclose(incl, 60):
-            chainfile = '../samples/noneclipsing-dimension_chain.dat.1'
-        else:
-            print('Need new GW chain file... exiting.')
-            exit(0)
+        jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label,incl,args.error_multiplier)
+        jsonfile = "d_{}_errm{}_GW-prior_result".format(label,args.error_multiplier)
+        chainfile = binary+'/chains/dimension_chain.dat.1'
+        #if np.isclose(incl, 90):
+        #    chainfile = '../samples/eclipsing-dimension_chain.dat.1'
+        #elif np.isclose(incl, 60):
+        #    chainfile = '../samples/noneclipsing-dimension_chain.dat.1'
+        #else:
+        #    print('Need new GW chain file... exiting.')
+        #    exit(0)
 
         postfile = "{}/{}.json".format(args.outdir, jsonfile)
         if not os.path.isfile(postfile):
@@ -86,8 +92,8 @@ for iii, binParams in enumerate(binsParams):
                 f"--gw-chain %s" % chainfile
             )
             subprocess.run([cmd], shell=True)
-     
-        with open(postfile) as json_file: 
+
+        with open(postfile) as json_file:
             post_out = json.load(json_file)
 
         t_0 = []
