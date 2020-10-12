@@ -56,6 +56,7 @@ class BinaryEM:
         m2 = 0.210,
         p0 = 414.7915404/(60*60*24.),
         pdot = 2.373e-11,
+        inc = np.pi/2
     ):
         """
         A class for representing binaries with em params in mind and gw properties.
@@ -87,6 +88,7 @@ class BinaryEM:
         self.m2 = m2
         self.p0 = p0
         self.pdot = pdot
+        self.inclination = inc
 
     @property
     def f0(self):
@@ -103,6 +105,29 @@ class BinaryEM:
     @property
     def tcoal(self):
         return 5./256. * (np.pi*self.f0)**(-8/3) * (G*self.mchirp/c**3)**(-5/3)
+    @property
+    def r1(self):
+        return (self.m1*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+
+    @property
+    def r2(self):
+        return (self.m2*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+
+    @property
+    def vel1(self):
+        return 2*np.pi*self.r1/self.p0/(60*60*24)
+
+    @property
+    def vel2(self):
+        return 2*np.pi*self.r2/self.p0/(60*60*24)
+
+    @property
+    def obsvel2(self):
+        return self.vel2*np.cos(self.inclination)
+
+    @property
+    def obsvel1(self):
+        return self.vel1*np.cos(self.inclination)
 
 class Observation:
     def __init__(self,
@@ -179,7 +204,8 @@ class Observation:
 def main():
     print("Creating Binary instance using default 7 min binary params.")
     for m1,m2 in [[0.17,1.4],[0.17,0.17],[1.4,1.4],[0.4,0.7]]:
-        b = Binary(m1=m1,m2=m2)
+        b = BinaryEM(m1=m1,m2=m2,inc=60)
+        print(b.vel1,b.r1)
         print("Creating Observation instance.")
         o = Observation(b, numobs=1000, mean_dt=10)
         #print("Create eclipse dt and freq table.")
