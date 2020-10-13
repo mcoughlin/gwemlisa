@@ -69,6 +69,8 @@ class BinaryEM:
             starting period [days]
         pdot: float
             starting abs rate of change of period
+        inc: float
+            binary inclination with respect to the observer [radians]
 
         Properties
         ----------
@@ -82,7 +84,18 @@ class BinaryEM:
             chirp mass [kilograms]
         tcoal: float
             time to coalescence [seconds]
-
+        r1: float
+            starting radius of body 1 to the barycenter [m]
+        r2: float
+            starting radius of body 2 to the barycenter [m]
+        vel1: float
+            starting speed of body 1 with respect to the barycenter [m/s]
+        vel2: float
+            starting speed of body 2 with respect to the barycenter [m/s]
+        dobsv1: float
+            starting maximum difference in line-of-sight speed of body 1 along one orbit [m/s]
+        dobsv2: float
+            starting maximum difference in line-of-sight speed of body 2 along one orbit [m/s]
         """
         self.m1 = m1
         self.m2 = m2
@@ -108,26 +121,22 @@ class BinaryEM:
     @property
     def r1(self):
         return (self.m1*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-
     @property
     def r2(self):
         return (self.m2*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-
     @property
     def vel1(self):
         return 2*np.pi*self.r1/self.p0/(60*60*24)
-
     @property
     def vel2(self):
         return 2*np.pi*self.r2/self.p0/(60*60*24)
-
     @property
-    def obsvel2(self):
-        return self.vel2*np.cos(self.inclination)
-
+    def dobsv1(self):
+        return abs(2*self.vel1*np.sin(self.inclination))
     @property
-    def obsvel1(self):
-        return self.vel1*np.cos(self.inclination)
+    def dobsv2(self):
+        return abs(2*self.vel2*np.sin(self.inclination))
+
 
 class Observation:
     def __init__(self,
@@ -204,8 +213,7 @@ class Observation:
 def main():
     print("Creating Binary instance using default 7 min binary params.")
     for m1,m2 in [[0.17,1.4],[0.17,0.17],[1.4,1.4],[0.4,0.7]]:
-        b = BinaryEM(m1=m1,m2=m2,inc=60)
-        print(b.vel1,b.r1)
+        b = BinaryEM(m1=m1,m2=m2,inc=np.pi/4)
         print("Creating Observation instance.")
         o = Observation(b, numobs=1000, mean_dt=10)
         #print("Create eclipse dt and freq table.")
