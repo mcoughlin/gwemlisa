@@ -5,6 +5,7 @@ import subprocess
 import json
 
 import numpy as np
+np.random.seed(0)
 
 import matplotlib
 #matplotlib.rc('text', usetex=True)
@@ -30,20 +31,24 @@ parser.add_argument("--outdir", default="out-gwprior")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
-parser.add_argument("--chainsdir", default="../data/", help = 'Folder in which all subfolders are binaries ran with gbmcmc')
+parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gbmcmc')
 
 args = parser.parse_args()
 
 data_out = {}
 binfolders = glob.glob(args.chainsdir+'/*/')
-for binary in binfolders:
+massratios = (np.random.rand(len(binfolders)))*(1-0.125) + 0.125
+for jj, binary in enumerate(binfolders):
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
     b = sim.BinaryGW(f,fdot)
-    o = sim.Observation(b, numobs=100, mean_dt=10)
-    data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
 
+    print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
+
+    o = sim.Observation(b, numobs=10, mean_dt=100)
+    data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
+    massratio = massratios[jj]
 
     for ii, row in enumerate(data):
         if ii % args.every != 0:
@@ -54,13 +59,14 @@ for binary in binfolders:
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
 
-        filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)
+        filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)  
         simfile = "{}/{}.dat".format(args.outdir, filelabel)
         if not os.path.isfile(simfile):
             cmd = (
                 f"python simulate_lightcurve.py --outdir {args.outdir} --incl {incl} "
                 f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
-                f"../data/JulyChimeraBJD.csv -m {args.error_multiplier}"
+                f"../data/JulyChimeraBJD.csv -m {args.error_multiplier} "
+                f"-q {massratio}"
             )
             if args.plot:
                 cmd += " --plot"
@@ -88,9 +94,11 @@ for binary in binfolders:
         data_out[ii] = np.array(t_0)
 
         print('')
-        print('T0 true: %.10f' % (tzero))
-        print('T0 estimated: %.10f' % (np.median(data_out[ii])))
+        print('T0 true: %.10f' % (tzero * 86400))
+        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
         print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
+
+        print(stop)
 
 # constants (SI units)
     G = 6.67e-11 # grav constant (m^3/kg/s^2)
@@ -102,22 +110,22 @@ for binary in binfolders:
     def mchirp(m1, m2):
         return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
 
-    plotDir = os.path.join(args.outdir, binary+'combined')
+    plotDir = os.path.join(args.outdir, binaryname+'_combined')
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
 # Get true values...
-    m1 = 0.610
-    m2 = 0.210
-    true_mchirp = mchirp(m1, m2)/msun
+    #m1 = 0.610
+    #m2 = 0.210
+    #true_mchirp = mchirp(m1, m2)/msun
+    true_mchirp = b.mchirp/msun
+    true_fdot = b.fdot
+    p0 = b.p0
+    f0 = b.f0
 
-    p0 = data[0,2]
     p0min, p0max = p0*0.9, p0*1.1
-    f0 = 2./(86400*p0)
-
-    pdot = 2.373e-11
-    fdotem = pdot/p0**2
-    true_fdot = fdotgw(f0, true_mchirp*msun)
+    #pdot = 2.373e-11
+    #fdotem = pdot/p0**2
 
 # Compare true values to what we measure...
 
@@ -149,6 +157,7 @@ for binary in binfolders:
 
     plt.ylabel("Residual [seconds]")
     plt.xlabel("$\Delta T$")
+    plt.legend()
     plt.show()
     plt.savefig(os.path.join(plotDir,"residual.pdf"), bbox_inches='tight')
     plt.close()
@@ -204,3 +213,4 @@ for binary in binfolders:
     figure.set_size_inches(18.0,18.0)
     plt.savefig(plotName, bbox_inches='tight')
     plt.close()
+

@@ -21,6 +21,8 @@ parser.add_argument(
 parser.add_argument(
     "--t-zero", default=563041, type=float, help="t-zero")
 parser.add_argument(
+    "-q", "--massratio", default=0.4, type=float, help="mass ratio")
+parser.add_argument(
     "-m", "--error-multiplier", default=0.1)
 parser.add_argument(
     "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
@@ -61,6 +63,7 @@ injection_parameters["incl"] = args.incl
 injection_parameters["period"] = args.period
 injection_parameters["t_zero"] = args.t_zero
 injection_parameters["scale_factor"] = np.mean(ydata)
+injection_parameters["q"] = args.massratio
 
 # Evaluate the injection data
 ydata = basic_model(time, **injection_parameters)
