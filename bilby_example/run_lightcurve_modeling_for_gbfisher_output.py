@@ -64,7 +64,7 @@ for binary in binfolders:
             )
             if args.plot:
                 cmd += " --plot"
-                subprocess.run([cmd], shell=True)
+            subprocess.run([cmd], shell=True)
 
         jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
         chainfile = binary+'/chains/dimension_chain.dat.1'
