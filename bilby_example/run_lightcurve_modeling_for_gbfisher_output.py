@@ -54,7 +54,7 @@ for binary in binfolders:
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
 
-        filelabel = "d_{}_errm{}".format(label, args.error_multiplier)
+        filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)
         simfile = "{}/{}.dat".format(args.outdir, filelabel)
         if not os.path.isfile(simfile):
             cmd = (
@@ -64,9 +64,9 @@ for binary in binfolders:
             )
             if args.plot:
                 cmd += " --plot"
-            subprocess.run([cmd], shell=True)
+                subprocess.run([cmd], shell=True)
 
-        jsonfile = "d_{}_errm{}_GW-prior_result".format(label,args.error_multiplier)
+        jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
         chainfile = binary+'/chains/dimension_chain.dat.1'
 
         postfile = "{}/{}.json".format(args.outdir, jsonfile)
