@@ -27,6 +27,11 @@ import simulate_binaryobs_gwem as sim
 import glob
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
+# constants (SI units)
+G = 6.67e-11 # grav constant (m^3/kg/s^2)
+msun = 1.989e30 # solar mass (kg)
+c = 299792458 # speed of light (m/s)
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
@@ -50,8 +55,9 @@ for jj, binary in enumerate(binfolders):
     mass1 = np.random.normal(0.6,0.085)
     mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
     massratio = mass1/mass2
-    rad1 = spl(mass1)
-    rad2 = spl(mass2)
+    sep = (mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    rad1 = spl(mass1)/sep
+    rad2 = spl(mass2)/sep
 
     print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
 
@@ -106,10 +112,6 @@ for jj, binary in enumerate(binfolders):
         print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
         print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
 
-    # constants (SI units)
-    G = 6.67e-11 # grav constant (m^3/kg/s^2)
-    msun = 1.989e30 # solar mass (kg)
-    c = 299792458 # speed of light (m/s)
 
     def fdotgw(f0, mchirp):
         return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
