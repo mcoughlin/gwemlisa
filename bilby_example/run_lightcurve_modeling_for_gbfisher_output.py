@@ -126,7 +126,11 @@ for jj, binary in enumerate(binfolders):
                 cmd += " --plot"
             subprocess.run([cmd], shell=True)
 
-        jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
+        if args.gwprior:
+            jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
+        else:
+            jsonfile = "data_{}_incl{}_errormultiplier{}_EM-prior_result".format(label, incl, args.error_multiplier)
+
         chainfile = binary+'/chains/dimension_chain.dat.1'
 
         postfile = "{}/{}/{}.json".format(args.outdir, binaryname, jsonfile)
