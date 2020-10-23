@@ -72,6 +72,7 @@ parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
 parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
+parser.add_argument("--gwprior", action="store_true")
 
 args = parser.parse_args()
 
@@ -130,12 +131,21 @@ for jj, binary in enumerate(binfolders):
 
         postfile = "{}/{}/{}.json".format(args.outdir, binaryname, jsonfile)
         if not os.path.isfile(postfile):
-            cmd = (
-                f"python analyse_lightcurve.py "
-                f"--outdir {args.outdir}/{binaryname} --lightcurve {simfile} "
-                f"--t-zero {tzero} --period {period} --incl {incl} "
-                f"--gw-chain %s" % chainfile
-            )
+            if args.gwprior:
+                cmd = (
+                    f"python analyse_lightcurve.py "
+                    f"--outdir {args.outdir}/{binaryname} "
+                    f"--lightcurve {simfile} "
+                    f"--t-zero {tzero} --period {period} --incl {incl} "
+                    f"--gw-chain %s" % chainfile
+                )
+            else:
+                cmd = (
+                    f"python analyse_lightcurve.py "
+                    f"--outdir {args.outdir}/{binaryname} "
+                    f"--lightcurve {simfile} "
+                    f"--t-zero {tzero} --period {period} --incl {incl} "
+                )
             subprocess.run([cmd], shell=True)
 
         with open(postfile) as json_file:
