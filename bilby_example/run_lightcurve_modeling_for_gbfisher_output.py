@@ -25,30 +25,39 @@ import corner
 import pymultinest
 import simulate_binaryobs_gwem as sim
 import glob
+from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
-parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gbmcmc')
+parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
 
 args = parser.parse_args()
 
 data_out = {}
 binfolders = glob.glob(args.chainsdir+'/*/')
-massratios = (np.random.rand(len(binfolders)))*(1-0.125) + 0.125
+#massratios = (np.random.rand(len(binfolders)))*(1-0.125) + 0.125
+wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
+mass,radius=wd_eof[:,0],wd_eof[:,1]
+spl = ius(mass,radius)
+print(binfolders)
 for jj, binary in enumerate(binfolders):
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
     b = sim.BinaryGW(f,fdot)
+    mass1 = np.random.normal(0.6,0.085)
+    mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
+    massratio = mass1/mass2
+    rad1 = spl(mass1)
+    rad2 = spl(mass2)
 
     print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
 
     o = sim.Observation(b, numobs=10, mean_dt=100)
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
-    massratio = massratios[jj]
 
     for ii, row in enumerate(data):
         if ii % args.every != 0:
@@ -66,7 +75,7 @@ for jj, binary in enumerate(binfolders):
                 f"python simulate_lightcurve.py --outdir {args.outdir} --incl {incl} "
                 f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
                 f"../data/JulyChimeraBJD.csv -m {args.error_multiplier} "
-                f"-q {massratio}"
+                f"-q {massratio} --radius1 {rad1} --radius2 {rad2}"
             )
             if args.plot:
                 cmd += " --plot"
