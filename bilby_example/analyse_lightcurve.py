@@ -151,5 +151,5 @@ meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=250,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q']}
+injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)
