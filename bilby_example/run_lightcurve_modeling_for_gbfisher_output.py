@@ -27,6 +27,40 @@ import simulate_binaryobs_gwem as sim
 import glob
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
+def norm_sym_ratio(eta):
+    # Assume floating point precision issues
+    #if np.any(np.isclose(eta, 0.25)):
+    #eta[np.isclose(eta, 0.25)] = 0.25
+
+    # Assert phyisicality
+    assert np.all(eta <= 0.25)
+
+    return np.sqrt(1 - 4. * eta)
+
+def q2eta(q):
+    return q/(1+q)**2
+
+def mc2ms(mc,eta):
+    """
+    Utility function for converting mchirp,eta to component masses. The
+    masses are defined so that m1>m2. The rvalue is a tuple (m1,m2).
+    """
+    root = np.sqrt(0.25-eta)
+    fraction = (0.5+root) / (0.5-root)
+    invfraction = 1/fraction
+
+    m2= mc * np.power((1+fraction),0.2) / np.power(fraction,0.6)
+
+    m1= mc* np.power(1+invfraction,0.2) / np.power(invfraction,0.6)
+    return (m1,m2)
+
+def ms2mc(m1,m2):
+    eta = m1*m2/( (m1+m2)*(m1+m2) )
+    mchirp = ((m1*m2)**(3./5.)) * ((m1 + m2)**(-1./5.))
+    q = m2/m1
+
+    return (mchirp,eta,q)
+
 # constants (SI units)
 G = 6.67e-11 # grav constant (m^3/kg/s^2)
 msun = 1.989e30 # solar mass (kg)
@@ -47,17 +81,21 @@ wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
 for jj, binary in enumerate(binfolders):
+    #if not jj == 99: continue
 
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
     b = sim.BinaryGW(f,fdot)
-    mass1 = np.random.normal(0.6,0.085)
-    mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
-    massratio = mass1/mass2
-    sep = (mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-    rad1 = spl(mass1)/sep
-    rad2 = spl(mass2)/sep
+    #mass1 = np.random.normal(0.6,0.085)
+    #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
+    #massratio = mass1/mass2
+    massratio = np.random.rand()*0.5 + 0.5
+    eta = q2eta(1/massratio)
+    (mass1,mass2)=mc2ms(b.mchirp/msun,eta)
+    sep = ((mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    rad1 = spl(mass1)*6.957e8/sep
+    rad2 = spl(mass2)*6.957e8/sep
 
     print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
 
@@ -72,6 +110,7 @@ for jj, binary in enumerate(binfolders):
         print(label)
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
+        print(period,tzero)
 
         filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)  
         simfile = "{}/{}.dat".format(args.outdir, filelabel)
@@ -101,9 +140,10 @@ for jj, binary in enumerate(binfolders):
         with open(postfile) as json_file:
             post_out = json.load(json_file)
 
+        idx = post_out["parameter_labels"].index("$t_0$")
         t_0 = []
         for row in post_out["samples"]["content"]:
-            t_0.append(row[3])
+            t_0.append(row[idx])
 
         data_out[ii] = np.array(t_0)
 
@@ -111,7 +151,6 @@ for jj, binary in enumerate(binfolders):
         print('T0 true: %.10f' % (tzero * 86400))
         print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
         print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
-
 
     def fdotgw(f0, mchirp):
         return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
@@ -205,20 +244,28 @@ for jj, binary in enumerate(binfolders):
     multifile = "%s/2-post_equal_weights.dat"%plotDir
     data = np.loadtxt(multifile)
 
-# Show that they are consistent with the injection...
+    # Show that they are consistent with the injection...
 
     fdot = fdotgw(f0, data[:,0]*msun)
+    fdot_log10 = np.array([np.log10(x) for x in fdot])
+
+    data = np.vstack((data[:,0], fdot_log10)).T
+
     print('Estimated chirp mass: %.5e +- %.5e' % (np.median(data[:,0]), np.std(data[:,0])))
     print('Estimated fdot: %.5e +- %.5e' % (np.median(fdot), np.std(fdot)))
     print('True fdot: %.5e, chirp mass: %.5e' % (true_fdot, true_mchirp))
 
     plotName = "%s/corner.pdf"%(plotDir)
-    figure = corner.corner(data[:,:-1], labels=labels,
+    figure = corner.corner(data, labels=[r"$M_c$",r"$\log_{10} \dot{f}$"],
+                           truths=[true_mchirp,np.log10(true_fdot)],
                            quantiles=[0.16, 0.5, 0.84],
                            show_titles=True, title_kwargs={"fontsize": title_fontsize},
                            label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
                            smooth=3)
-    figure.set_size_inches(18.0,18.0)
+    figure.set_size_inches(12.0,12.0)
     plt.savefig(plotName, bbox_inches='tight')
     plt.close()
 
+    fid = open(os.path.join(plotDir,'params.dat'),'w')
+    fid.write('%.10f %.10f %.10f %.10f\n' % (mass1, mass2, rad1, rad2))
+    fid.close()
