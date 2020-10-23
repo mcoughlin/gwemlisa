@@ -107,17 +107,17 @@ for jj, binary in enumerate(binfolders):
             continue
 
         label = f"{binaryname}row{ii}"
-        print(label)
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
-        print(period,tzero)
 
         filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)  
-        simfile = "{}/{}.dat".format(args.outdir, filelabel)
+        simfile = "{}/{}/{}.dat".format(args.outdir, binaryname, filelabel)
         if not os.path.isfile(simfile):
             cmd = (
-                f"python simulate_lightcurve.py --outdir {args.outdir} --incl {incl} "
-                f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
+                f"python simulate_lightcurve.py "
+                f"--outdir {args.outdir}/{binaryname} --incl {incl} "
+                f"--label {label} --t-zero {tzero} "
+                f"--period {period} --err-lightcurve "
                 f"../data/JulyChimeraBJD.csv -m {args.error_multiplier} "
                 f"-q {massratio} --radius1 {rad1} --radius2 {rad2}"
             )
@@ -128,10 +128,11 @@ for jj, binary in enumerate(binfolders):
         jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
         chainfile = binary+'/chains/dimension_chain.dat.1'
 
-        postfile = "{}/{}.json".format(args.outdir, jsonfile)
+        postfile = "{}/{}/{}.json".format(args.outdir, binaryname, jsonfile)
         if not os.path.isfile(postfile):
             cmd = (
-                f"python analyse_lightcurve.py --outdir {args.outdir} --lightcurve {simfile} "
+                f"python analyse_lightcurve.py "
+                f"--outdir {args.outdir}/{binaryname} --lightcurve {simfile} "
                 f"--t-zero {tzero} --period {period} --incl {incl} "
                 f"--gw-chain %s" % chainfile
             )
@@ -157,11 +158,11 @@ for jj, binary in enumerate(binfolders):
     def mchirp(m1, m2):
         return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
 
-    plotDir = os.path.join(args.outdir, binaryname+'_combined')
+    plotDir = os.path.join(args.outdir, binaryname, 'combined')
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
-# Get true values...
+    # Get true values...
     #m1 = 0.610
     #m2 = 0.210
     #true_mchirp = mchirp(m1, m2)/msun
@@ -174,7 +175,7 @@ for jj, binary in enumerate(binfolders):
     #pdot = 2.373e-11
     #fdotem = pdot/p0**2
 
-# Compare true values to what we measure...
+    # Compare true values to what we measure...
 
     phtimes = []
     med_ress = []
@@ -227,8 +228,7 @@ for jj, binary in enumerate(binfolders):
 
         return prob
 
-# Estimate chirp mass based on the observations
-
+    # Estimate chirp mass based on the observations
     n_live_points = 1000
     evidence_tolerance = 0.5
     max_iter = 0
