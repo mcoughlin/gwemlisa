@@ -123,7 +123,7 @@ injection = DEFAULT_INJECTION_PARAMETERS
 injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
-priors["q"] = Uniform(0.125, 1, "q")
+priors["q"] = Uniform(0.5, 1, "q")
 # priors["radius_1"] = Uniform(0, 1, "radius_1")
 # priors["radius_2"] = Uniform(0, 1, "radius_2")
 # priors["sbratio"] = Uniform(0, 1, "sbratio")

@@ -37,8 +37,9 @@ args = parser.parse_args()
 
 data_out = {}
 binfolders = glob.glob(args.chainsdir+'/*/')
-massratios = (np.random.rand(len(binfolders)))*(1-0.125) + 0.125
+massratios = (np.random.rand(len(binfolders)))*(1-0.5) + 0.5
 for jj, binary in enumerate(binfolders):
+
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
@@ -98,9 +99,7 @@ for jj, binary in enumerate(binfolders):
         print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
         print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
 
-        print(stop)
-
-# constants (SI units)
+    # constants (SI units)
     G = 6.67e-11 # grav constant (m^3/kg/s^2)
     msun = 1.989e30 # solar mass (kg)
     c = 299792458 # speed of light (m/s)
