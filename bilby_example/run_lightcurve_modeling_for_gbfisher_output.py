@@ -27,6 +27,72 @@ import simulate_binaryobs_gwem as sim
 import glob
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
+# constants (SI units)
+G = 6.67e-11 # grav constant (m^3/kg/s^2)
+msun = 1.989e30 # solar mass (kg)
+c = 299792458 # speed of light (m/s)
+
+def greedy_kde_areas_2d(pts):
+
+    pts = np.random.permutation(pts)
+
+    mu = np.mean(pts, axis=0)
+    cov = np.cov(pts, rowvar=0)
+
+    L = np.linalg.cholesky(cov)
+    detL = L[0,0]*L[1,1]
+
+    pts = np.linalg.solve(L, (pts - mu).T).T
+
+    Npts = pts.shape[0]
+    kde_pts = pts[:int(Npts/2), :]
+    den_pts = pts[int(Npts/2):, :]
+
+    kde = ss.gaussian_kde(kde_pts.T)
+
+    kdedir = {}
+    kdedir["kde"] = kde
+    kdedir["mu"] = mu
+    kdedir["L"] = L
+
+    return kdedir
+
+def greedy_kde_areas_1d(pts):
+
+    pts = np.random.permutation(pts)
+    mu = np.mean(pts, axis=0)
+
+    Npts = pts.shape[0]
+    kde_pts = pts[:int(Npts/2)]
+    den_pts = pts[int(Npts/2):]
+
+    kde = ss.gaussian_kde(kde_pts.T)
+
+    kdedir = {}
+    kdedir["kde"] = kde
+    kdedir["mu"] = mu
+
+    return kdedir
+
+def kde_eval(kdedir,truth):
+
+    kde = kdedir["kde"]
+    mu = kdedir["mu"]
+    L = kdedir["L"]
+
+    truth = np.linalg.solve(L, truth-mu)
+    td = kde(truth)
+
+    return td
+
+def kde_eval_single(kdedir,truth):
+
+    kde = kdedir["kde"]
+    mu = kdedir["mu"]
+    td = kde(truth)
+
+    return td
+
 def norm_sym_ratio(eta):
     # Assume floating point precision issues
     #if np.any(np.isclose(eta, 0.25)):
@@ -61,10 +127,10 @@ def ms2mc(m1,m2):
 
     return (mchirp,eta,q)
 
-# constants (SI units)
-G = 6.67e-11 # grav constant (m^3/kg/s^2)
-msun = 1.989e30 # solar mass (kg)
-c = 299792458 # speed of light (m/s)
+def fdotgw(f0, mchirp):
+    return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
+def mchirp(m1, m2):
+    return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
@@ -77,6 +143,9 @@ parser.add_argument("--gwprior", action="store_true")
 args = parser.parse_args()
 
 data_out = {}
+data_out["t0"] = {}
+data_out["inc"] = {}
+
 binfolders = glob.glob(args.chainsdir+'/*/')
 wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
@@ -156,23 +225,71 @@ for jj, binary in enumerate(binfolders):
             post_out = json.load(json_file)
 
         idx = post_out["parameter_labels"].index("$t_0$")
-        t_0 = []
+        idx2 = post_out["parameter_labels"].index("incl")
+        t_0, inc = [], []
         for row in post_out["samples"]["content"]:
             t_0.append(row[idx])
+            inc.append(row[idx2])
 
-        data_out[ii] = np.array(t_0)
+        data_out["t0"][ii] = np.array(t_0)
+        data_out["inc"][ii] = np.array(inc)
 
         print('')
         print('T0 true: %.10f' % (tzero * 86400))
-        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
-        print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
+        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out["t0"][ii]*86400),np.std(data_out["t0"][ii]*86400)))
+        print('T0 true - estimated [s]: %.2f' % ((np.median(data_out["t0"][ii])-tzero)*86400))
 
-    def fdotgw(f0, mchirp):
-        return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
-    def mchirp(m1, m2):
-        return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
+    plotDir = os.path.join(args.outdir, binaryname, 'inc')
+    if not os.path.isdir(plotDir):
+        os.makedirs(plotDir)
 
-    plotDir = os.path.join(args.outdir, binaryname, 'combined')
+    def myprior(cube, ndim, nparams):
+            cube[0] = cube[0]*180.0
+
+    def myloglike(cube, ndim, nparams):
+        inc = cube[0]
+
+        prob = 0
+        for kdedir in kdedirs: 
+            prob = prob + np.log(kde_eval_single(kdedir,[inc])[0])
+
+        if np.isnan(prob):
+            prob = -np.inf
+
+        return prob
+
+    kdedirs = []
+    for ii in data_out["inc"].keys():
+        kdedirs.append(greedy_kde_areas_1d(data_out["inc"][ii]))
+
+    # Estimate chirp mass based on the observations
+    n_live_points = 1000
+    evidence_tolerance = 0.5
+    max_iter = 0
+    title_fontsize = 26
+    label_fontsize = 30
+
+    parameters = ["inclination"]
+    labels = [r"$\iota$"]
+    n_params = len(parameters)
+
+    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+
+    multifile = "%s/2-post_equal_weights.dat"%plotDir
+    data = np.loadtxt(multifile)
+
+    plotName = "%s/corner.pdf"%(plotDir)
+    figure = corner.corner(data[:,:-1], labels=labels,
+                           truths=[incl],
+                           quantiles=[0.16, 0.5, 0.84],
+                           show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                           label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                           smooth=3)
+    figure.set_size_inches(12.0,12.0)
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
+
+    plotDir = os.path.join(args.outdir, binaryname, 'fdot')
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
@@ -196,11 +313,11 @@ for jj, binary in enumerate(binfolders):
     std_ress = []
 
     plt.figure(figsize=(10,6))
-    for ii in data_out.keys():
-        med_T0 = np.median(data_out[ii])
-        std_T0 = np.std(data_out[ii])
+    for ii in data_out["t0"].keys():
+        med_T0 = np.median(data_out["t0"][ii])
+        std_T0 = np.std(data_out["t0"][ii])
         
-        res = (data_out[ii]) - data[ii,0]
+        res = (data_out["t0"][ii]) - data[ii,0]
         med_res, std_res = np.median(res), np.std(res)
         print('Residual Med: %.10f Std: %.10f' % ( med_res, std_res))
         plt.errorbar(med_T0,(med_T0-(data[ii,0]+data[ii,1]/86400))*86400,yerr=std_res,fmt='r^')
