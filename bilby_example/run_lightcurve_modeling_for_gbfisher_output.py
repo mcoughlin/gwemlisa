@@ -103,34 +103,34 @@ def norm_sym_ratio(eta):
 
     return np.sqrt(1 - 4. * eta)
 
-def q2eta(q):
-    return q/(1+q)**2
-
-def mc2ms(mc,eta):
-    """
-    Utility function for converting mchirp,eta to component masses. The
-    masses are defined so that m1>m2. The rvalue is a tuple (m1,m2).
-    """
-    root = np.sqrt(0.25-eta)
-    fraction = (0.5+root) / (0.5-root)
-    invfraction = 1/fraction
-
-    m2= mc * np.power((1+fraction),0.2) / np.power(fraction,0.6)
-
-    m1= mc* np.power(1+invfraction,0.2) / np.power(invfraction,0.6)
-    return (m1,m2)
-
-def ms2mc(m1,m2):
-    eta = m1*m2/( (m1+m2)*(m1+m2) )
-    mchirp = ((m1*m2)**(3./5.)) * ((m1 + m2)**(-1./5.))
-    q = m2/m1
-
-    return (mchirp,eta,q)
+#def q2eta(q):
+#    return q/(1+q)**2
+#
+#def mc2ms(mc,eta):
+#    """
+#    Utility function for converting mchirp,eta to component masses. The
+#    masses are defined so that m1>m2. The rvalue is a tuple (m1,m2).
+#    """
+#    root = np.sqrt(0.25-eta)
+#    fraction = (0.5+root) / (0.5-root)
+#    invfraction = 1/fraction
+#
+#    m2= mc * np.power((1+fraction),0.2) / np.power(fraction,0.6)
+#
+#    m1= mc* np.power(1+invfraction,0.2) / np.power(invfraction,0.6)
+#    return (m1,m2)
+#
+#def ms2mc(m1,m2):
+#    eta = m1*m2/( (m1+m2)*(m1+m2) )
+#    mchirp = ((m1*m2)**(3./5.)) * ((m1 + m2)**(-1./5.))
+#    q = m2/m1
+#
+#    return (mchirp,eta,q)
 
 def fdotgw(f0, mchirp):
     return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
-def mchirp(m1, m2):
-    return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
+#def mchirp(m1, m2):
+#    return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
@@ -155,14 +155,16 @@ for jj, binary in enumerate(binfolders):
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
-    b = sim.BinaryGW(f,fdot)
+    massratio = np.random.rand()*0.5 + 0.5
+    b = sim.BinaryGW(f,fdot,1/massratio)
     #mass1 = np.random.normal(0.6,0.085)
     #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
     #massratio = mass1/mass2
-    massratio = np.random.rand()*0.5 + 0.5
-    eta = q2eta(1/massratio)
-    (mass1,mass2)=mc2ms(b.mchirp/msun,eta)
-    sep = ((mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    #massratio = np.random.rand()*0.5 + 0.5
+    #eta = q2eta(1/massratio)
+    #(mass1,mass2)=mc2ms(b.mchirp/msun,eta)
+    #sep = ((mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    sep = b.r1+b.r2
     rad1 = spl(mass1)*6.957e8/sep
     rad2 = spl(mass2)*6.957e8/sep
 
