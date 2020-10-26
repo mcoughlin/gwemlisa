@@ -151,7 +151,6 @@ wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
 for jj, binary in enumerate(binfolders):
-    #if not jj == 99: continue
 
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
@@ -276,10 +275,10 @@ for jj, binary in enumerate(binfolders):
     pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
 
     multifile = "%s/2-post_equal_weights.dat"%plotDir
-    data = np.loadtxt(multifile)
+    multidata = np.loadtxt(multifile)
 
     plotName = "%s/corner.pdf"%(plotDir)
-    figure = corner.corner(data[:,:-1], labels=labels,
+    figure = corner.corner(multidata[:,:-1], labels=labels,
                            truths=[incl],
                            quantiles=[0.16, 0.5, 0.84],
                            show_titles=True, title_kwargs={"fontsize": title_fontsize},
@@ -322,8 +321,6 @@ for jj, binary in enumerate(binfolders):
         print('Residual Med: %.10f Std: %.10f' % ( med_res, std_res))
         plt.errorbar(med_T0,(med_T0-(data[ii,0]+data[ii,1]/86400))*86400,yerr=std_res,fmt='r^')
         plt.errorbar(med_T0,med_res*86400,yerr=std_res*86400,fmt='kx')
-
-        print(med_res)
 
         theory = - 1/2*(true_fdot/f0)*(med_T0*86400)**2
         plt.plot(med_T0,theory,'go')
