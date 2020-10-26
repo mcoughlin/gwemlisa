@@ -73,10 +73,10 @@ def add_gw_prior(args, prior):
 
     # This is using a normal-prior fitted to the samples (much fsater than KDE)
     #priors["incl"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "incl")
-    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl")
+    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl", latex_label=r"$\iota$")
 
     # Here I'm using the user-defined period NOT the GW prior because the GW samples are for a different period
-    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period", latex_label="$P_0$")
 
     #priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     return priors
@@ -124,8 +124,8 @@ injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")
-# priors["radius_1"] = Uniform(0, 1, "radius_1")
-# priors["radius_2"] = Uniform(0, 1, "radius_2")
+priors["radius_1"] = Uniform(0, 1, "radius_1")
+priors["radius_2"] = Uniform(0, 1, "radius_2")
 # priors["sbratio"] = Uniform(0, 1, "sbratio")
 # priors["heat2"] = Uniform(0, 10, "heat2")
 # priors["ldc_1"] = Uniform(0, 1, "ldc_1")
@@ -151,5 +151,5 @@ meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=250,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q']}
+injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)

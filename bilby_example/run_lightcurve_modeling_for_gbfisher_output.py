@@ -32,16 +32,120 @@ G = 6.67e-11 # grav constant (m^3/kg/s^2)
 msun = 1.989e30 # solar mass (kg)
 c = 299792458 # speed of light (m/s)
 
+def greedy_kde_areas_2d(pts):
+
+    pts = np.random.permutation(pts)
+
+    mu = np.mean(pts, axis=0)
+    cov = np.cov(pts, rowvar=0)
+
+    L = np.linalg.cholesky(cov)
+    detL = L[0,0]*L[1,1]
+
+    pts = np.linalg.solve(L, (pts - mu).T).T
+
+    Npts = pts.shape[0]
+    kde_pts = pts[:int(Npts/2), :]
+    den_pts = pts[int(Npts/2):, :]
+
+    kde = ss.gaussian_kde(kde_pts.T)
+
+    kdedir = {}
+    kdedir["kde"] = kde
+    kdedir["mu"] = mu
+    kdedir["L"] = L
+
+    return kdedir
+
+def greedy_kde_areas_1d(pts):
+
+    pts = np.random.permutation(pts)
+    mu = np.mean(pts, axis=0)
+
+    Npts = pts.shape[0]
+    kde_pts = pts[:int(Npts/2)]
+    den_pts = pts[int(Npts/2):]
+
+    kde = ss.gaussian_kde(kde_pts.T)
+
+    kdedir = {}
+    kdedir["kde"] = kde
+    kdedir["mu"] = mu
+
+    return kdedir
+
+def kde_eval(kdedir,truth):
+
+    kde = kdedir["kde"]
+    mu = kdedir["mu"]
+    L = kdedir["L"]
+
+    truth = np.linalg.solve(L, truth-mu)
+    td = kde(truth)
+
+    return td
+
+def kde_eval_single(kdedir,truth):
+
+    kde = kdedir["kde"]
+    mu = kdedir["mu"]
+    td = kde(truth)
+
+    return td
+
+def norm_sym_ratio(eta):
+    # Assume floating point precision issues
+    #if np.any(np.isclose(eta, 0.25)):
+    #eta[np.isclose(eta, 0.25)] = 0.25
+
+    # Assert phyisicality
+    assert np.all(eta <= 0.25)
+
+    return np.sqrt(1 - 4. * eta)
+
+def q2eta(q):
+    return q/(1+q)**2
+
+def mc2ms(mc,eta):
+    """
+    Utility function for converting mchirp,eta to component masses. The
+    masses are defined so that m1>m2. The rvalue is a tuple (m1,m2).
+    """
+    root = np.sqrt(0.25-eta)
+    fraction = (0.5+root) / (0.5-root)
+    invfraction = 1/fraction
+
+    m2= mc * np.power((1+fraction),0.2) / np.power(fraction,0.6)
+
+    m1= mc* np.power(1+invfraction,0.2) / np.power(invfraction,0.6)
+    return (m1,m2)
+
+def ms2mc(m1,m2):
+    eta = m1*m2/( (m1+m2)*(m1+m2) )
+    mchirp = ((m1*m2)**(3./5.)) * ((m1 + m2)**(-1./5.))
+    q = m2/m1
+
+    return (mchirp,eta,q)
+
+def fdotgw(f0, mchirp):
+    return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
+def mchirp(m1, m2):
+    return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
 parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
+parser.add_argument("--gwprior", action="store_true")
 
 args = parser.parse_args()
 
 data_out = {}
+data_out["t0"] = {}
+data_out["inc"] = {}
+
 binfolders = glob.glob(args.chainsdir+'/*/')
 wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
@@ -52,16 +156,19 @@ for jj, binary in enumerate(binfolders):
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
     b = sim.BinaryGW(f,fdot)
-    mass1 = np.random.normal(0.6,0.085)
-    mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
-    massratio = mass1/mass2
-    sep = (mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-    rad1 = spl(mass1)/sep
-    rad2 = spl(mass2)/sep
+    #mass1 = np.random.normal(0.6,0.085)
+    #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
+    #massratio = mass1/mass2
+    massratio = np.random.rand()*0.5 + 0.5
+    eta = q2eta(1/massratio)
+    (mass1,mass2)=mc2ms(b.mchirp/msun,eta)
+    sep = ((mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    rad1 = spl(mass1)*6.957e8/sep
+    rad2 = spl(mass2)*6.957e8/sep
 
     print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
 
-    o = sim.Observation(b, numobs=10, mean_dt=100)
+    o = sim.Observation(b, numobs=10, mean_dt=365)
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
 
     for ii, row in enumerate(data):
@@ -69,16 +176,17 @@ for jj, binary in enumerate(binfolders):
             continue
 
         label = f"{binaryname}row{ii}"
-        print(label)
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
 
         filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)  
-        simfile = "{}/{}.dat".format(args.outdir, filelabel)
+        simfile = "{}/{}/{}.dat".format(args.outdir, binaryname, filelabel)
         if not os.path.isfile(simfile):
             cmd = (
-                f"python simulate_lightcurve.py --outdir {args.outdir} --incl {incl} "
-                f"--label {label} --t-zero {tzero} --period {period} --err-lightcurve "
+                f"python simulate_lightcurve.py "
+                f"--outdir {args.outdir}/{binaryname} --incl {incl} "
+                f"--label {label} --t-zero {tzero} "
+                f"--period {period} --err-lightcurve "
                 f"../data/JulyChimeraBJD.csv -m {args.error_multiplier} "
                 f"-q {massratio} --radius1 {rad1} --radius2 {rad2}"
             )
@@ -86,43 +194,105 @@ for jj, binary in enumerate(binfolders):
                 cmd += " --plot"
             subprocess.run([cmd], shell=True)
 
-        jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
+        if args.gwprior:
+            jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
+        else:
+            jsonfile = "data_{}_incl{}_errormultiplier{}_EM-prior_result".format(label, incl, args.error_multiplier)
+
         chainfile = binary+'/chains/dimension_chain.dat.1'
 
-        postfile = "{}/{}.json".format(args.outdir, jsonfile)
+        postfile = "{}/{}/{}.json".format(args.outdir, binaryname, jsonfile)
         if not os.path.isfile(postfile):
-            cmd = (
-                f"python analyse_lightcurve.py --outdir {args.outdir} --lightcurve {simfile} "
-                f"--t-zero {tzero} --period {period} --incl {incl} "
-                f"--gw-chain %s" % chainfile
-            )
+            if args.gwprior:
+                cmd = (
+                    f"python analyse_lightcurve.py "
+                    f"--outdir {args.outdir}/{binaryname} "
+                    f"--lightcurve {simfile} "
+                    f"--t-zero {tzero} --period {period} --incl {incl} "
+                    f"--gw-chain %s" % chainfile
+                )
+            else:
+                cmd = (
+                    f"python analyse_lightcurve.py "
+                    f"--outdir {args.outdir}/{binaryname} "
+                    f"--lightcurve {simfile} "
+                    f"--t-zero {tzero} --period {period} --incl {incl} "
+                )
             subprocess.run([cmd], shell=True)
 
         with open(postfile) as json_file:
             post_out = json.load(json_file)
 
-        t_0 = []
+        idx = post_out["parameter_labels"].index("$t_0$")
+        idx2 = post_out["parameter_labels"].index("$\\iota$")
+        t_0, inc = [], []
         for row in post_out["samples"]["content"]:
-            t_0.append(row[3])
+            t_0.append(row[idx])
+            inc.append(row[idx2])
 
-        data_out[ii] = np.array(t_0)
+        data_out["t0"][ii] = np.array(t_0)
+        data_out["inc"][ii] = np.array(inc)
 
         print('')
         print('T0 true: %.10f' % (tzero * 86400))
-        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out[ii]*86400),np.std(data_out[ii]*86400)))
-        print('T0 true - estimated [s]: %.2f' % ((np.median(data_out[ii])-tzero)*86400))
+        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out["t0"][ii]*86400),np.std(data_out["t0"][ii]*86400)))
+        print('T0 true - estimated [s]: %.2f' % ((np.median(data_out["t0"][ii])-tzero)*86400))
 
-
-    def fdotgw(f0, mchirp):
-        return 96./5. * np.pi * (G*np.pi*mchirp)**(5/3.)/c**5*f0**(11/3.)
-    def mchirp(m1, m2):
-        return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
-
-    plotDir = os.path.join(args.outdir, binaryname+'_combined')
+    plotDir = os.path.join(args.outdir, binaryname, 'inc')
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
-# Get true values...
+    def myprior(cube, ndim, nparams):
+            cube[0] = cube[0]*180.0
+
+    def myloglike(cube, ndim, nparams):
+        inc = cube[0]
+
+        prob = 0
+        for kdedir in kdedirs: 
+            prob = prob + np.log(kde_eval_single(kdedir,[inc])[0])
+
+        if np.isnan(prob):
+            prob = -np.inf
+
+        return prob
+
+    kdedirs = []
+    for ii in data_out["inc"].keys():
+        kdedirs.append(greedy_kde_areas_1d(data_out["inc"][ii]))
+
+    # Estimate chirp mass based on the observations
+    n_live_points = 1000
+    evidence_tolerance = 0.5
+    max_iter = 0
+    title_fontsize = 26
+    label_fontsize = 30
+
+    parameters = ["inclination"]
+    labels = [r"$\iota$"]
+    n_params = len(parameters)
+
+    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+
+    multifile = "%s/2-post_equal_weights.dat"%plotDir
+    multidata = np.loadtxt(multifile)
+
+    plotName = "%s/corner.pdf"%(plotDir)
+    figure = corner.corner(multidata[:,:-1], labels=labels,
+                           truths=[incl],
+                           quantiles=[0.16, 0.5, 0.84],
+                           show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                           label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                           smooth=3)
+    figure.set_size_inches(12.0,12.0)
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
+
+    plotDir = os.path.join(args.outdir, binaryname, 'fdot')
+    if not os.path.isdir(plotDir):
+        os.makedirs(plotDir)
+
+    # Get true values...
     #m1 = 0.610
     #m2 = 0.210
     #true_mchirp = mchirp(m1, m2)/msun
@@ -135,24 +305,22 @@ for jj, binary in enumerate(binfolders):
     #pdot = 2.373e-11
     #fdotem = pdot/p0**2
 
-# Compare true values to what we measure...
+    # Compare true values to what we measure...
 
     phtimes = []
     med_ress = []
     std_ress = []
 
     plt.figure(figsize=(10,6))
-    for ii in data_out.keys():
-        med_T0 = np.median(data_out[ii])
-        std_T0 = np.std(data_out[ii])
+    for ii in data_out["t0"].keys():
+        med_T0 = np.median(data_out["t0"][ii])
+        std_T0 = np.std(data_out["t0"][ii])
         
-        res = (data_out[ii]) - data[ii,0]
+        res = (data_out["t0"][ii]) - data[ii,0]
         med_res, std_res = np.median(res), np.std(res)
         print('Residual Med: %.10f Std: %.10f' % ( med_res, std_res))
         plt.errorbar(med_T0,(med_T0-(data[ii,0]+data[ii,1]/86400))*86400,yerr=std_res,fmt='r^')
         plt.errorbar(med_T0,med_res*86400,yerr=std_res*86400,fmt='kx')
-
-        print(med_res)
 
         theory = - 1/2*(true_fdot/f0)*(med_T0*86400)**2
         plt.plot(med_T0,theory,'go')
@@ -188,8 +356,7 @@ for jj, binary in enumerate(binfolders):
 
         return prob
 
-# Estimate chirp mass based on the observations
-
+    # Estimate chirp mass based on the observations
     n_live_points = 1000
     evidence_tolerance = 0.5
     max_iter = 0
@@ -205,20 +372,28 @@ for jj, binary in enumerate(binfolders):
     multifile = "%s/2-post_equal_weights.dat"%plotDir
     data = np.loadtxt(multifile)
 
-# Show that they are consistent with the injection...
+    # Show that they are consistent with the injection...
 
     fdot = fdotgw(f0, data[:,0]*msun)
+    fdot_log10 = np.array([np.log10(x) for x in fdot])
+
+    data = np.vstack((data[:,0], fdot_log10)).T
+
     print('Estimated chirp mass: %.5e +- %.5e' % (np.median(data[:,0]), np.std(data[:,0])))
     print('Estimated fdot: %.5e +- %.5e' % (np.median(fdot), np.std(fdot)))
     print('True fdot: %.5e, chirp mass: %.5e' % (true_fdot, true_mchirp))
 
     plotName = "%s/corner.pdf"%(plotDir)
-    figure = corner.corner(data[:,:-1], labels=labels,
+    figure = corner.corner(data, labels=[r"$M_c$",r"$\log_{10} \dot{f}$"],
+                           truths=[true_mchirp,np.log10(true_fdot)],
                            quantiles=[0.16, 0.5, 0.84],
                            show_titles=True, title_kwargs={"fontsize": title_fontsize},
                            label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
                            smooth=3)
-    figure.set_size_inches(18.0,18.0)
+    figure.set_size_inches(12.0,12.0)
     plt.savefig(plotName, bbox_inches='tight')
     plt.close()
 
+    fid = open(os.path.join(plotDir,'params.dat'),'w')
+    fid.write('%.10f %.10f %.10f %.10f\n' % (mass1, mass2, rad1, rad2))
+    fid.close()

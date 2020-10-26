@@ -27,6 +27,10 @@ parser.add_argument(
 parser.add_argument(
     "-q", "--massratio", default=0.4, type=float, help="mass ratio")
 parser.add_argument(
+    "-r", "--radius1", default=0.125, type=float, help="radius 1")
+parser.add_argument(
+    "-s", "--radius2", default=0.3, type=float, help="radius 2")
+parser.add_argument(
     "-m", "--error-multiplier", default=0.1)
 parser.add_argument(
     "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
