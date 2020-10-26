@@ -73,10 +73,10 @@ def add_gw_prior(args, prior):
 
     # This is using a normal-prior fitted to the samples (much fsater than KDE)
     #priors["incl"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "incl")
-    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl")
+    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl", latex_label=r"$\iota$")
 
     # Here I'm using the user-defined period NOT the GW prior because the GW samples are for a different period
-    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period")
+    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period", latex_label="$P_0$")
 
     #priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     return priors

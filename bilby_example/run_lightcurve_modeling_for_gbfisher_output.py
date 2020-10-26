@@ -169,7 +169,7 @@ for jj, binary in enumerate(binfolders):
 
     print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
 
-    o = sim.Observation(b, numobs=10, mean_dt=100)
+    o = sim.Observation(b, numobs=10, mean_dt=365)
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
 
     for ii, row in enumerate(data):
@@ -225,7 +225,7 @@ for jj, binary in enumerate(binfolders):
             post_out = json.load(json_file)
 
         idx = post_out["parameter_labels"].index("$t_0$")
-        idx2 = post_out["parameter_labels"].index("incl")
+        idx2 = post_out["parameter_labels"].index("$\\iota$")
         t_0, inc = [], []
         for row in post_out["samples"]["content"]:
             t_0.append(row[idx])
