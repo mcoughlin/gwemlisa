@@ -10,7 +10,7 @@ class BinaryGW:
     def __init__(self,
         f0,
         fdot,
-        q = None
+        q = np.nan
     ):
         """
         A class for representing binaries with gw params in mind.
@@ -54,7 +54,10 @@ class BinaryGW:
         self.f0 = f0
         self.fdot = fdot
         self.q = q
-
+        self.eta = self.q/(1+self.q)**2
+        self.root = np.sqrt(0.25-self.eta)
+        self.fraction = (0.5+self.root) / (0.5-self.root)
+    
     @property
     def p0(self):
         return 2./self.f0/(60*60*24.)
@@ -67,36 +70,30 @@ class BinaryGW:
     @property
     def tcoal(self):
         return 5./256. * (np.pi*self.f0)**(-8/3) * (G*self.mchirp/c**3)**(-5/3)
-    if q:
-
-        eta = q/(1+q)**2
-        root = np.sqrt(0.25-eta)
-        fraction = (0.5+root) / (0.5-root)
-
-        @property
-        def m1(self):
-            return self.mchirp/msun * np.power((1+fraction),0.2) / np.power(fraction,0.6)
-        @property
-        def m2(self):
-            return self.mchirp/msun * np.power(1+1/fraction,0.2) / np.power(1/fraction,0.6)
-        @property
-        def r1(self):
-            return (self.m1*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-        @property
-        def r2(self):
-            return (self.m2*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
-        @property
-        def vel1(self):
-            return 2*np.pi*self.r1/self.p0/(60*60*24)
-        @property
-        def vel2(self):
-            return 2*np.pi*self.r2/self.p0/(60*60*24)
-        @property
-        def dobsv1(self):
-            return abs(2*self.vel1*np.sin(self.inclination))
-        @property
-        def dobsv2(self):
-            return abs(2*self.vel2*np.sin(self.inclination))
+    @property
+    def m1(self):
+        return self.mchirp/msun * np.power((1+self.fraction),0.2) / np.power(self.fraction,0.6)
+    @property
+    def m2(self):
+        return self.mchirp/msun * np.power(1+1/self.fraction,0.2) / np.power(1/self.fraction,0.6)
+    @property
+    def r1(self):
+        return (self.m1*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    @property
+    def r2(self):
+        return (self.m2*msun*G*(self.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
+    @property
+    def vel1(self):
+        return 2*np.pi*self.r1/self.p0/(60*60*24)
+    @property
+    def vel2(self):
+        return 2*np.pi*self.r2/self.p0/(60*60*24)
+    @property
+    def dobsv1(self):
+        return abs(2*self.vel1*np.sin(self.inclination))
+    @property
+    def dobsv2(self):
+        return abs(2*self.vel2*np.sin(self.inclination))
 
 class BinaryEM:
 

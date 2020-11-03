@@ -165,6 +165,8 @@ for jj, binary in enumerate(binfolders):
     #(mass1,mass2)=mc2ms(b.mchirp/msun,eta)
     #sep = ((mass1+mass2)*msun*G*(b.p0*60*60*24)**2/(4*np.pi**2))**(1/3)
     sep = b.r1+b.r2
+    mass1 = b.m1
+    mass2 = b.m2
     rad1 = spl(mass1)*6.957e8/sep
     rad2 = spl(mass2)*6.957e8/sep
 
