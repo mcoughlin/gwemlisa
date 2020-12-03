@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "-o", "--outdir", default="data", help="Path to the ouput directory")
 parser.add_argument(
-    "-l", "--label", default="label", help="A lebel for the ouput")
+    "-l", "--label", default='A', help="A label for the ouput")
 parser.add_argument(
     "-i", "--incl", default=90, type=float, help="Inclination")
 parser.add_argument(
@@ -40,7 +40,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label
-label = "data_{}_incl{}_errormultiplier{}".format(args.label, args.incl, args.error_multiplier)
+label = "data_{}_incl{}_errormult{}".format(args.label, args.incl, args.error_multiplier)
 
 # Read in real lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(args.err_lightcurve)

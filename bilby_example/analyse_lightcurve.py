@@ -11,31 +11,37 @@ import matplotlib.pyplot as plt
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
-# Ignore these: they may become useful when we use the GW prior
-# class SamplesPrior(bilby.core.prior.Prior):
-#     def __init__(self, samples, name):
-#         self.name = name
-#         self.samples = samples
-#         self.latex_label = self.name.replace('_', '-')
-#         self.minimum = samples.min()
-#         self.maximum = samples.max()
-#         self.unit = ''
-#         self._boundary = None
-#         self._is_fixed = False
-#
-#     def rescale(self, val):
-#         return np.random.choice(self.samples)
-#
-#     def __repr__(self):
-#         return "Samples prior"
-#
-#
+class SamplesPrior(bilby.core.prior.Prior):
+    def __init__(self, samples, name, latex_label):
+        self.name = name
+        self.samples = samples
+        self.latex_label = latex_label
+        self.minimum = samples.min()
+        self.maximum = samples.max()
+        self.unit = ''
+        self._boundary = None
+        self._is_fixed = False
+
+        # Only used for plotting
+        self.kde = scipy.stats.gaussian_kde(samples)
+
+    def rescale(self, val):
+        return np.random.choice(self.samples)
+
+    def __repr__(self):
+        return "Samples prior"
+
+    def prob(self, val):
+        # A hack to enable easy plotting of the prior, not used in calculation
+        return self.kde.pdf(val)
+
+
 class KDEPrior(bilby.core.prior.Prior):
-    def __init__(self, samples, name):
+    def __init__(self, samples, name, latex_label):
         self.name = name
         self.samples = samples
         self.kde = scipy.stats.gaussian_kde(samples)
-        self.latex_label = self.name.replace('_', '-')
+        self.latex_label = latex_label
         self.minimum = samples.min()
         self.maximum = samples.max()
         self.unit = ''
@@ -67,18 +73,33 @@ def add_gw_prior(args, prior):
     inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
 
     # Convert the samples into priors
+    if args.gw_prior_type == "uniform":
+        priors["incl"] = Uniform(
+            np.min(inclination_prior_vals),
+            np.max(inclination_prior_vals),
+            "incl",
+            latex_label=r"$\iota$"
+        )
+    elif args.gw_prior_type == "samples":
+        priors["incl"] = SamplesPrior(
+            inclination_prior_vals,
+            "incl",
+            latex_label="$\iota$"
+        )
+    elif args.gw_prior_type == "kde":
+        priors["incl"] = KDEPrior(
+            inclination_prior_vals,
+            "incl",
+            latex_label="$\iota$"
+        )
 
-    # This is using the KDEPrior - I found this to be very slow
-    #priors["incl"] = KDEPrior(inclination_prior_vals, "incl")
+    # This needs to be thought about:
+    priors["period"] = Normal(
+        np.mean(period_prior_vals),
+        np.std(period_prior_vals),
+        "period",
+        latex_label="$P_0$")
 
-    # This is using a normal-prior fitted to the samples (much fsater than KDE)
-    #priors["incl"] = Normal(np.mean(inclination_prior_vals), np.std(inclination_prior_vals), "incl")
-    priors["incl"] = Uniform(np.min(inclination_prior_vals), np.max(inclination_prior_vals), "incl", latex_label=r"$\iota$")
-
-    # Here I'm using the user-defined period NOT the GW prior because the GW samples are for a different period
-    priors["period"] = Normal(np.mean(period_prior_vals), np.std(period_prior_vals), "period", latex_label="$P_0$")
-
-    #priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     return priors
 
 
@@ -88,6 +109,8 @@ parser.add_argument("-o", "--outdir", default=None, help="Path to the ouput dire
 parser.add_argument("-l", "--lightcurve", type=str)
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
+parser.add_argument("--gw-prior-type", help="GW prior type",
+                    choices=["uniform", "kde", "samples"], default="samples")
 parser.add_argument(
     "-i", "--incl", default=90, type=float, help="Inclination")
 parser.add_argument(
@@ -140,7 +163,7 @@ priors["t_zero"] = Uniform(
 # If we want a GW-based prior, set it up, else use the EM prior
 if args.gw_chain:
     priors = add_gw_prior(args, priors)
-    label += "_GW-prior"
+    label += "_GW-prior-{}".format(args.gw_prior_type)
 else:
     # EM prior
     priors["incl"] = Uniform(0, 90, "incl", latex_label=r"$\iota$")
