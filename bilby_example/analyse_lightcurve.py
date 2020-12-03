@@ -49,7 +49,7 @@ class KDEPrior(bilby.core.prior.Prior):
         self._is_fixed = False
 
     def rescale(self, val):
-        return self.kde.resample()
+        return self.kde.resample(1)
 
     def sample(self, size=1):
         return self.kde.resample(size=size)
