@@ -110,7 +110,7 @@ parser.add_argument("-l", "--lightcurve", type=str)
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
 parser.add_argument("--gw-prior-type", help="GW prior type",
-                    choices=["uniform", "kde", "samples"], default="samples")
+                    choices=["uniform", "kde", "samples"], default="kde")
 parser.add_argument(
     "-i", "--incl", default=90, type=float, help="Inclination")
 parser.add_argument(
