@@ -73,33 +73,41 @@ def add_gw_prior(args, prior):
     inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
 
     # Convert the samples into priors
-    if args.gw_prior_type == "uniform":
+    if args.gw_prior_type == "old":
         priors["incl"] = Uniform(
             np.min(inclination_prior_vals),
             np.max(inclination_prior_vals),
             "incl",
             latex_label=r"$\iota$"
         )
+        priors["period"] = Normal(
+            np.mean(period_prior_vals),
+            np.std(period_prior_vals),
+            "period",
+            latex_label="$P_0$"
+        )
     elif args.gw_prior_type == "samples":
         priors["incl"] = SamplesPrior(
             inclination_prior_vals,
             "incl",
-            latex_label="$\iota$"
+            latex_label=r"$\iota$"
+        )
+        priors["period"] = SamplesPrior(
+            period_prior_vals,
+            "period",
+            latex_label="$p_0$"
         )
     elif args.gw_prior_type == "kde":
         priors["incl"] = KDEPrior(
             inclination_prior_vals,
             "incl",
-            latex_label="$\iota$"
+            latex_label=r"$\iota$"
         )
-
-    # This needs to be thought about:
-    priors["period"] = Normal(
-        np.mean(period_prior_vals),
-        np.std(period_prior_vals),
-        "period",
-        latex_label="$P_0$")
-
+        priors["period"] = KDEPrior(
+            period_prior_vals,
+            "period",
+            latex_label="$p_0$"
+        )
     return priors
 
 
