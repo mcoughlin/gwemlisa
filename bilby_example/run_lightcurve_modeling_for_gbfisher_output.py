@@ -138,7 +138,8 @@ parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
 parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
 parser.add_argument("--gwprior", action="store_true")
-
+parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
+        
 args = parser.parse_args()
 
 data_out = {}
@@ -150,7 +151,8 @@ wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
 for jj, binary in enumerate(binfolders):
-    
+    if jj != 7: continue
+
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
@@ -169,7 +171,7 @@ for jj, binary in enumerate(binfolders):
     rad1 = spl(mass1)*6.957e8/sep
     rad2 = spl(mass2)*6.957e8/sep
 
-    print('Period (days): %.10f' % (2 * (1.0 / f) / 86400.0))
+    print(f'Period (days): {2 * (1.0 / f) / 86400.0:.10f}')
 
     o = sim.Observation(b, numobs=10, mean_dt=365)
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
@@ -182,8 +184,8 @@ for jj, binary in enumerate(binfolders):
         period = 2 * (1.0 / row[2]) / 86400.0
         tzero = row[0] + row[1] / 86400
 
-        filelabel = "data_{}_incl{}_errormultiplier{}".format(label, incl, args.error_multiplier)  
-        simfile = "{}/{}/{}.dat".format(args.outdir, binaryname, filelabel)
+        filelabel = f"data_{label}_incl{incl}_errormultiplier{args.error_multiplier}"  
+        simfile = f"{args.outdir}/{binaryname}/{filelabel}.dat"
         if not os.path.isfile(simfile):
             cmd = (
                 f"python simulate_lightcurve.py "
@@ -197,30 +199,29 @@ for jj, binary in enumerate(binfolders):
                 cmd += " --plot"
             subprocess.run([cmd], shell=True)
 
+        jsonfile = (
+            f"data_{label}_incl{incl}_"
+            f"errormultiplier{args.error_multiplier}_"
+        )
         if args.gwprior:
-            jsonfile = "data_{}_incl{}_errormultiplier{}_GW-prior_result".format(label, incl, args.error_multiplier)
+            jsonfile += f"GW-prior-{args.gw_prior_type}_result"
         else:
-            jsonfile = "data_{}_incl{}_errormultiplier{}_EM-prior_result".format(label, incl, args.error_multiplier)
+            jsonfile += f"EM-prior_result"
 
         chainfile = binary+'/chains/dimension_chain.dat.1'
 
-        postfile = "{}/{}/{}.json".format(args.outdir, binaryname, jsonfile)
+        postfile = f"{args.outdir}/{binaryname}/{jsonfile}.json"
         if not os.path.isfile(postfile):
+            cmd = (
+                f"python analyse_lightcurve.py "
+                f"--outdir {args.outdir}/{binaryname} "
+                f"--lightcurve {simfile} "
+                f"--t-zero {tzero} --period {period} --incl {incl} "
+            )
             if args.gwprior:
-                cmd = (
-                    f"python analyse_lightcurve.py "
-                    f"--outdir {args.outdir}/{binaryname} "
-                    f"--lightcurve {simfile} "
-                    f"--t-zero {tzero} --period {period} --incl {incl} "
-                    f"--gw-chain %s" % chainfile
-                )
-            else:
-                cmd = (
-                    f"python analyse_lightcurve.py "
-                    f"--outdir {args.outdir}/{binaryname} "
-                    f"--lightcurve {simfile} "
-                    f"--t-zero {tzero} --period {period} --incl {incl} "
-                )
+                cmd += f" --gw-chain {chainfile}"
+                if args.gw_prior_type:
+                    cmd += f" --gw-prior-type {args.gw_prior_type}"
             subprocess.run([cmd], shell=True)
 
         with open(postfile) as json_file:
@@ -237,9 +238,9 @@ for jj, binary in enumerate(binfolders):
         data_out["inc"][ii] = np.array(inc)
 
         print('')
-        print('T0 true: %.10f' % (tzero * 86400))
-        print('T0 estimated: %.10f +- %.10f' % (np.median(data_out["t0"][ii]*86400),np.std(data_out["t0"][ii]*86400)))
-        print('T0 true - estimated [s]: %.2f' % ((np.median(data_out["t0"][ii])-tzero)*86400))
+        print(f'T0 true: {tzero * 86400:.10f}')
+        print(f'T0 estimated: {np.median(data_out["t0"][ii]*86400):.10f} +- {np.std(data_out["t0"][ii]*86400):.10f}')
+        print(f'T0 true - estimated [s]: {(np.median(data_out["t0"][ii])-tzero)*86400:.2f}')
 
     plotDir = os.path.join(args.outdir, binaryname, 'inc')
     if not os.path.isdir(plotDir):
@@ -275,12 +276,12 @@ for jj, binary in enumerate(binfolders):
     labels = [r"$\iota$"]
     n_params = len(parameters)
 
-    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename=f'{plotDir}/2-', evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
 
-    multifile = "%s/2-post_equal_weights.dat"%plotDir
+    multifile = f"{plotDir}/2-post_equal_weights.dat"
     multidata = np.loadtxt(multifile)
 
-    plotName = "%s/corner.pdf"%(plotDir)
+    plotName = f"{plotDir}/corner.pdf"
     figure = corner.corner(multidata[:,:-1], labels=labels,
                            truths=[incl],
                            quantiles=[0.16, 0.5, 0.84],
@@ -321,7 +322,7 @@ for jj, binary in enumerate(binfolders):
         
         res = (data_out["t0"][ii]) - data[ii,0]
         med_res, std_res = np.median(res), np.std(res)
-        print('Residual Med: %.10f Std: %.10f' % ( med_res, std_res))
+        print(f'Residual Med: {med_res:.10f} Std: {std_res:.10f}')
         plt.errorbar(med_T0,(med_T0-(data[ii,0]+data[ii,1]/86400))*86400,yerr=std_res,fmt='r^')
         plt.errorbar(med_T0,med_res*86400,yerr=std_res*86400,fmt='kx')
 
@@ -370,9 +371,9 @@ for jj, binary in enumerate(binfolders):
     labels = [r"$M_c$"]
     n_params = len(parameters)
 
-    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename=f'{plotDir}/2-', evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
 
-    multifile = "%s/2-post_equal_weights.dat"%plotDir
+    multifile = f"{plotDir}/2-post_equal_weights.dat"
     data = np.loadtxt(multifile)
 
     # Show that they are consistent with the injection...
@@ -382,11 +383,11 @@ for jj, binary in enumerate(binfolders):
 
     data = np.vstack((data[:,0], fdot_log10)).T
 
-    print('Estimated chirp mass: %.5e +- %.5e' % (np.median(data[:,0]), np.std(data[:,0])))
-    print('Estimated fdot: %.5e +- %.5e' % (np.median(fdot), np.std(fdot)))
-    print('True fdot: %.5e, chirp mass: %.5e' % (true_fdot, true_mchirp))
+    print(f'Estimated chirp mass: {np.median(data[:,0]):.5e} +- {np.std(data[:,0]):.5e}')
+    print(f'Estimated fdot: {np.median(fdot):.5e} +- {np.std(fdot):.5e}')
+    print(f'True fdot: {true_fdot:.5e}, chirp mass: {true_mchirp:.5e}')
 
-    plotName = "%s/corner.pdf"%(plotDir)
+    plotName = f"{plotDir}/corner.pdf"
     figure = corner.corner(data, labels=[r"$M_c$",r"$\log_{10} \dot{f}$"],
                            truths=[true_mchirp,np.log10(true_fdot)],
                            quantiles=[0.16, 0.5, 0.84],
@@ -398,5 +399,5 @@ for jj, binary in enumerate(binfolders):
     plt.close()
 
     fid = open(os.path.join(plotDir,'params.dat'),'w')
-    fid.write('%.10f %.10f %.10f %.10f\n' % (mass1, mass2, rad1, rad2))
+    fid.write(f'{mass1:.10f} {mass2:.10f} {rad1:.10f} {rad2:.10f}\n')
     fid.close()

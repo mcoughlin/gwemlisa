@@ -40,7 +40,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label
-label = "data_{}_incl{}_errormult{}".format(args.label, args.incl, args.error_multiplier)
+label = "data_{}_incl{}_errormultiplier{}".format(args.label, args.incl, args.error_multiplier)
 
 # Read in real lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(args.err_lightcurve)
