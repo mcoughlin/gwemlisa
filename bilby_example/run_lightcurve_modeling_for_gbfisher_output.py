@@ -151,8 +151,6 @@ wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
 for jj, binary in enumerate(binfolders):
-    if jj != 7: continue
-
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binary+binaryname+'.dat')
     incl = incl*180/np.pi
