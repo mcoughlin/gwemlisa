@@ -88,6 +88,7 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
         m    a 1D array with model values at times t
 
     """
+
     grid = "very_sparse"
     exact_grav = False
     verbose = 0
@@ -121,3 +122,57 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
         return t_obs * 10**99
 
     return m
+
+def basic_model_pdot(t_obs, radius_1, radius_2, sbratio, incl, t_zero,
+                     q, period, heat_2, scale_factor, ldc_1, ldc_2, gdc_2,
+                     f_c, f_s, t_exp, Pdot):
+
+    phases = pdot_phasefold(t_obs,P=period,Pdot=Pdot*(60*60*24.)**2,t0=0)
+  
+    tmods, fluxes = [], []
+    for ii in range(len(t_obs)):
+        P_new = period - Pdot*t_obs[ii]*(60*60*24.)**2
+        flux = basic_model(phases*P_new, radius_1, radius_2, sbratio, incl,
+                           t_zero, q, P_new, heat_2, scale_factor,
+                           ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp)
+
+        tmod = np.mod(t_obs[ii],P_new)
+        tmods.append(tmod)
+        phot = np.interp(tmod,t_obs,flux,period=P_new)
+        fluxes.append(phot)
+       
+    return fluxes
+
+
+def pdot_phasefold(times, P, Pdot, t0=0):
+    """
+    @author: kburdge
+       
+    Function which returns phases corresponding to timestamps in a lightcurve 
+    given a period P, period derivative Pdot, and reference epoch t0
+    
+    If no reference epoch is supplied, reference epoch is set to earliest time in lightcurve
+    
+    INPUTS:
+            times = time array
+            
+            P = starting period
+            
+            Pdot = rate of change of period in units of time/time
+            
+            t0 = start time
+            
+    OUTPUTS:
+            phases = phases for given time array, period, and Pdot
+    
+    """
+    
+    if t0==0:
+            times=times-np.min(times)
+    else:
+            times=times-t0
+    
+    phases=((times-1/2*Pdot/P*(times)**2) % P)/P
+    
+    return phases
+
