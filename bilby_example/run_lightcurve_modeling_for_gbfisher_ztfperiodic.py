@@ -21,7 +21,7 @@ from matplotlib.collections import PatchCollection
 
 import scipy.stats as ss
 import corner
-import pymultinest
+#import pymultinest
 import simulate_binaryobs_gwem as sim
 import glob
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
@@ -160,12 +160,12 @@ for jj, binary in enumerate(binfolders):
     massratio = np.random.rand()*0.5 + 0.5
     b = sim.BinaryGW(f,fdot,1/massratio)
 
-    #p0 = 414.7915404/(60*60*24.)
-    #pdot = 2.373e-11
-    #f0 = 2./p0/(60*60*24.)
-    #fdotem = 2.*pdot/p0**2/(60*60*24.)**2
+    p0 = 414.7915404/(60*60*24.)
+    pdot = 2.373e-11
+    f0 = 2./p0/(60*60*24.)
+    fdotem = 2.*pdot/p0**2/(60*60*24.)**2
 
-    #b = sim.BinaryGW(f0,fdotem,1)
+    b = sim.BinaryGW(f0,fdotem,1)
 
     #mass1 = np.random.normal(0.6,0.085)
     #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
@@ -206,6 +206,7 @@ for jj, binary in enumerate(binfolders):
         for i in range(len(t)):
             if i != 0:
                 t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt,1))
+        t = t - np.min(t)
 
         # Evaluate the injection data
         lc = basic_model_pdot(t, **injection_parameters)
@@ -217,48 +218,44 @@ for jj, binary in enumerate(binfolders):
         fmin, fmax = 1/period - 100*df, 1/period + 100*df
         nf = int(np.ceil((fmax - fmin) / df))
         freqs = fmin + df * np.arange(nf)
-        periods = 1/freqs
+        periods = (1/freqs).astype(np.float32)
+        periods = np.sort(periods)
 
-        pdots_to_test = [-b.pdot*(60*60*24.)**2]
+        pdots_to_test = np.array([0, b.pdot*(60*60*24.)**2]).astype(np.float32)
+
         lc = (lc - np.min(lc))/(np.max(lc)-np.min(lc))
         time_stack = [t.astype(np.float32)]
         mag_stack = [lc.astype(np.float32)] 
-  
-        from ztfperiodic.pyaov.pyaov import aovw, amhw 
-        aov, fr, _ = amhw(t, lc, lc*0.05,
-                          fstop=fmax,
-                          fstep=df,
-                          fr0=fmin)
+        #pdots_to_test = np.array([0.0]).astype(np.float32)  
+
+        from periodfind.aov import AOV
+        phase_bins = 20
+        aov = AOV(phase_bins)
+
+        data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test,
+                            output='periodogram')
+        dataslice = data_out[0].data[:,1]
 
         low_side, high_side = 0.0, 0.0
-        jj = np.argmin(np.abs(fr - 1/period))
-        aovpeak = aov[jj]
+        jj = np.argmin(np.abs(period - periods))
+        aovpeak = dataslice[jj]
         ii = jj + 0
         while high_side == 0.0:
-            if aov[ii] < aovpeak/2.0:
-                high_side = fr[ii]
+            if dataslice[ii] < aovpeak/2.0:
+                high_side = periods[ii]
                 break
             ii = ii + 1
 
         ii = jj + 0
         while low_side == 0.0:
-            if aov[ii] < aovpeak/2.0:
-                low_side = fr[ii]
+            if dataslice[ii] < aovpeak/2.0:
+                low_side = periods[ii]
                 break
             ii = ii - 1
-        err = np.mean([fr[jj]-low_side, high_side-fr[jj]])/fr[jj]
+        
+        err = np.mean([periods[jj]-low_side, high_side-periods[jj]])/periods[jj]
 
-        #plt.figure()
-        #plt.plot(fr, aov, 'k*')
-        #plt.plot([1/period,1/period],[np.min(aov),np.max(aov)],'r--')
-        #plt.savefig('test.png')
-        #plt.close()
-        #print(stop)
-        #plt.figure()
-        #plt.plot(pdot_phasefold(t, period, b.pdot*(60*60*24.)**2, t0=t[0]), ydata, 'k*')
-        #plt.plot(pdot_phasefold(t, period, 0.0, t0=t[0]), ydata, 'r*')
-        #plt.savefig('test.png')
-        #plt.close()
+        print('Average error bar: %.10f' % err)
 
     for ii, row in enumerate(data):
         if ii % args.every != 0:

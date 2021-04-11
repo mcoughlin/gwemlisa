@@ -1,5 +1,5 @@
 import ellc
-import bilby
+#import bilby
 import numpy as np
 
 Msun = 4.9169e-6  # mass of sun in s
@@ -15,7 +15,8 @@ DEFAULT_INJECTION_PARAMETERS = dict(
     ldc_1=0.2, ldc_2=0.4548, gdc_2=0.61, f_c=0, f_s=0, t_exp=3.0 / 86400)
 
 
-class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
+class GaussianLikelihood():
+#class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
     def __init__(self, x, y, func, sigma=None):
         """
         A general Gaussian likelihood for known or unknown noise - the model
