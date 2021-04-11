@@ -133,6 +133,8 @@ label = os.path.basename(args.lightcurve.rstrip('.dat'))
 if args.outdir is None:
     args.outdir = "outdir_{}".format(label)
 
+if not os.path.isdir(args.outdir):
+    os.makedirs(args.outdir)
 
 # Read in lightcurve to get the typical time and uncertainties
 if "csv" in args.lightcurve:
