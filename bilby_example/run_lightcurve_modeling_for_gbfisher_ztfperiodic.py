@@ -21,7 +21,7 @@ from matplotlib.collections import PatchCollection
 
 import scipy.stats as ss
 import corner
-#import pymultinest
+import pymultinest
 import simulate_binaryobs_gwem as sim
 import glob
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
