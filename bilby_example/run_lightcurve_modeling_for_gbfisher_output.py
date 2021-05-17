@@ -137,6 +137,9 @@ parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
 parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
+parser.add_argument("--numobs", default=10, type=int, help="Number of obsevations")
+parser.add_argument("--mean-dt", default=365., type=float, help="Mean time between observations")
+parser.add_argument("--std-dt", default=2., type=float, help="Standard deviation of time between observations")
 parser.add_argument("--gwprior", action="store_true")
 parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
         
@@ -171,7 +174,7 @@ for jj, binary in enumerate(binfolders):
 
     print(f'Period (days): {2 * (1.0 / f) / 86400.0:.10f}')
 
-    o = sim.Observation(b, numobs=10, mean_dt=365)
+    o = sim.Observation(b, numobs=args.numobs, mean_dt=args.mean_dt, std_dt=args.std_dt)
     data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
 
     for ii, row in enumerate(data):

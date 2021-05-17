@@ -138,7 +138,13 @@ parser.add_argument("--outdir", default="out-gwprior")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
-parser.add_argument("--chainsdir", default="../data/08yr_sp32_100_binaries/", help = 'Folder in which all subfolders are binaries ran with gb')
+parser.add_argument("--chainsdir", default='/home/cough052/joh15016/gwemlisa/data/results', help="Binaries directory")
+parser.add_argument("--binary", type=int, help="Binary number")
+parser.add_argument("--numobs", default=10, type=int, help="Number of obsevations")
+parser.add_argument("--mean-dt", default=365., type=float, help="Mean time between observations")
+parser.add_argument("--std-dt", default=2., type=float, help="Standard deviation of time between observations")
+#parser.add_argument("--samples-per-peak", default=10.0, type=float)
+#parser.add_argument("--phase-bins", default=20, type=int)
 parser.add_argument("--gwprior", action="store_true")
 parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
 parser.add_argument("--periodfind", action="store_true")        
@@ -149,13 +155,14 @@ data_out = {}
 data_out["t0"] = {}
 data_out["inc"] = {}
 
-binary = args.chainsdir
+binaries = [b for b in os.listdir(args.chainsdir)]
+binary = os.path.join(args.chainsdir, binaries[args.binary-1])
 wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
     
 binaryname = binary.split("/")[-1].replace(".dat","")
-binaryfile = os.path.join(binary, "%s.dat" % binaryname)
+binaryfile = os.path.join(binary, f"{binaryname}.dat")
 f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binaryfile)
 incl = incl*180/np.pi
 massratio = np.random.rand()*0.5 + 0.5
@@ -183,7 +190,7 @@ rad2 = spl(mass2)*6.957e8/sep
 
 print(f'Period (days): {2 * (1.0 / b.f0) / 86400.0:.10f}')
 
-o = sim.Observation(b, numobs=10, mean_dt=365)
+o = sim.Observation(b, numobs=args.numobs, mean_dt=args.mean_dt, std_dt=args.std_dt)
 data = np.array([o.obstimes,(o.phases()-o.obstimes)*60*60*24.,o.freqs()]).T
 
 if args.periodfind:
@@ -199,14 +206,11 @@ if args.periodfind:
     injection_parameters["radius_2"] = rad2
     injection_parameters["Pdot"] = b.pdot
 
-    mean_dt, std_dt = 3.0, 0.5
-
-    numobs = 1000
-    t = np.zeros(numobs)
+    t = np.zeros(args.numobs)
     t[0] = o.obstimes[0]
     for i in range(len(t)):
         if i != 0:
-            t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt,1))
+            t[i] += t[i-1] + np.abs(np.random.normal(args.mean_dt,args.std_dt,1))
     t = t - np.min(t)
 
     # Evaluate the injection data
@@ -216,6 +220,7 @@ if args.periodfind:
     fmin, fmax = 2/baseline, 480
     samples_per_peak = 10.0
     df = 1./(samples_per_peak * baseline)
+    #df = 1./(args.samples_per_peak * baseline)
     fmin, fmax = 1/period - 100*df, 1/period + 100*df
     nf = int(np.ceil((fmax - fmin) / df))
     freqs = fmin + df * np.arange(nf)
@@ -230,8 +235,9 @@ if args.periodfind:
     #pdots_to_test = np.array([0.0]).astype(np.float32)  
 
     from periodfind.aov import AOV
-    phase_bins = 20
+    phase_bins = 20.0
     aov = AOV(phase_bins)
+    #aov = AOV(args.phase_bins)
 
     data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test,
                         output='periodogram')
@@ -256,7 +262,7 @@ if args.periodfind:
     
     err = np.mean([periods[jj]-low_side, high_side-periods[jj]])/periods[jj]
 
-    print('Average error bar: %.10f' % err)
+    print('Average error bar: {err:.10f}')
 
 data_out = {}
 data_out["t0"] = {}
