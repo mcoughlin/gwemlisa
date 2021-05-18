@@ -38,24 +38,24 @@ with open(os.path.join(opts.jobDir,'jobGBMCMC.txt'),'w') as job:
     job.write('#SBATCH --job-name=GBMCMC\n')
     job.write('#SBATCH --mail-type=ALL\n')
     job.write('#SBATCH --mail-user=joh15016@umn.edu\n')
-    job.write('#SBATCH --time=95:59:59\n')
+    job.write('#SBATCH --time=8:59:59\n')
     job.write('#SBATCH --nodes=1\n')
     job.write('#SBATCH --ntasks=1\n')
-    job.write('#SBATCH --cpus-per-task=24\n')
-    job.write('#SBATCH --mem=60gb\n')
+    job.write('#SBATCH --cpus-per-task=12\n')
+    job.write('#SBATCH --mem=24gb\n')
     job.write('#SBATCH -p small\n\n')
     
     #random library depencies
-    job.write('module load ompi\n')
+    job.write('module load hdf5\n')
     job.write('module load mygsl/2.6\n')
+    job.write('module load gsl/2.5\n')
     job.write('module load libmvec/1.0\n')
     job.write('module load libm/1.0\n')
-    
     job.write('cd ~/ldasoft/master/bin\n\n')
     for foldername in os.listdir(resDir):
         for filename in os.listdir(os.path.join(resDir,foldername)):
             binaryDir = os.path.join(resDir,foldername)
-            job.write(f'mpirun -np 24 ./gb_mcmc --inj {os.path.join(binaryDir,filename)} --sources {opts.sources} --duration {opts.duration:.2f} --no-rj --cheat --samples {opts.samples}\n')
+            job.write(f'mpirun -np 12 --oversubscribe ./gb_mcmc --inj {os.path.join(binaryDir,filename)} --sources {opts.sources} --duration {opts.duration:.2f} --no-rj --cheat --sim-noise --noiseseed 161803 --threads 12 --samples {opts.samples}\n')
             #sort files
             job.write('mv ' + ' '.join(outputFiles) + f' {binaryDir}\n')
             job.write('rm ' + ' '.join(extraFiles) + '\n\n')

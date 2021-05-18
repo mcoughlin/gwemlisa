@@ -28,7 +28,7 @@ with open(os.path.join(opts.jobDir,'jobGWEMLISA.txt'),'w') as job:
     job.write('#SBATCH --job-name=GWEMLISA\n')
     job.write('#SBATCH --mail-type=ALL\n')
     job.write('#SBATCH --mail-user=joh15016@umn.edu\n')
-    job.write('#SBATCH --time=3:59:59\n')
+    job.write('#SBATCH --time=8:59:59\n')
     job.write('#SBATCH --nodes=1\n')
     job.write('#SBATCH --ntasks=1\n')
     job.write('#SBATCH --cpus-per-task=1\n')

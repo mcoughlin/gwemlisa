@@ -168,12 +168,11 @@ incl = incl*180/np.pi
 massratio = np.random.rand()*0.5 + 0.5
 b = sim.BinaryGW(f,fdot,1/massratio)
 
-p0 = 414.7915404/(60*60*24.)
-pdot = 2.373e-11
-f0 = 2./p0/(60*60*24.)
-fdotem = 2.*pdot/p0**2/(60*60*24.)**2
-
-b = sim.BinaryGW(f0,fdotem,1)
+#p0 = 414.7915404/(60*60*24.)
+#pdot = 2.373e-11
+#f0 = 2./p0/(60*60*24.)
+#fdotem = 2.*pdot/p0**2/(60*60*24.)**2
+#b = sim.BinaryGW(f0,fdotem,1)
 
 #mass1 = np.random.normal(0.6,0.085)
 #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
@@ -206,11 +205,16 @@ if args.periodfind:
     injection_parameters["radius_2"] = rad2
     injection_parameters["Pdot"] = b.pdot
 
-    t = np.zeros(args.numobs)
+    mean_dt, std_dt = 3.0, 0.5
+    numobs = 1000
+    
+    #t = np.zeros(args.numobs)
+    t = np.zeros(numobs)
     t[0] = o.obstimes[0]
     for i in range(len(t)):
         if i != 0:
-            t[i] += t[i-1] + np.abs(np.random.normal(args.mean_dt,args.std_dt,1))
+            #t[i] += t[i-1] + np.abs(np.random.normal(args.mean_dt,args.std_dt,1))
+            t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt))
     t = t - np.min(t)
 
     # Evaluate the injection data
