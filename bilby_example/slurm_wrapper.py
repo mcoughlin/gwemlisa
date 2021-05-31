@@ -3,7 +3,7 @@ import optparse
 
 def parse_commandline():
     parser = optparse.OptionParser()
-    parser.add_option("--jobDir", default="/home/cough052/joh15016/jobs/gwemlisa")
+    parser.add_option("--jobdir", default="/home/cough052/joh15016/jobs/gwemlisa")
     parser.add_option("--chainsdir", default="/home/cough052/joh15016/gwemlisa/data/results")
     parser.add_option("--outdir", default="out-gwprior")
     parser.add_option("--numobs", type=int, default=25)
@@ -23,7 +23,7 @@ if opts.gwprior:
 if opts.periodfind:
     cmd += '--periodfind '
 
-with open(os.path.join(opts.jobDir,'jobGWEMLISA.txt'),'w') as job:
+with open(os.path.join(opts.jobdir,'jobGWEMLISA.txt'),'w') as job:
     job.write('#!/bin/bash\n')
     job.write('#SBATCH --job-name=GWEMLISA\n')
     job.write('#SBATCH --mail-type=ALL\n')
