@@ -29,15 +29,16 @@ with open(opts.binaries) as binaryParams:
             results.write(line)
 
 #create slurm script
+threads = 12
 with open(os.path.join(opts.jobdir,'jobGBMCMC.txt'),'w') as job:
     job.write('#!/bin/bash\n')
     job.write('#SBATCH --job-name=GBMCMC\n')
     job.write('#SBATCH --mail-type=ALL\n')
     job.write('#SBATCH --mail-user=joh15016@umn.edu\n')
-    job.write('#SBATCH --time=7:59:59\n')
+    job.write('#SBATCH --time=1:59:59\n')
     job.write('#SBATCH --nodes=1\n')
     job.write('#SBATCH --ntasks=1\n')
-    job.write('#SBATCH --cpus-per-task=24\n')
+    job.write('#SBATCH --cpus-per-task=%d\n' % threads)
     job.write('#SBATCH --mem=60gb\n')
     job.write('#SBATCH -p small\n\n')
     
@@ -50,4 +51,4 @@ with open(os.path.join(opts.jobdir,'jobGBMCMC.txt'),'w') as job:
     job.write('cd ~/ldasoft/master/bin\n\n')
 
     job.write("BN=\"binary$(echo $SLURM_ARRAY_TASK_ID | sed -e :a -e 's/^.\{1,%d\}$/0&/;ta')\"\n" % (nlen-1))
-    job.write(f'mpirun -np 24 ./gb_mcmc --inj {os.path.join(os.path.join(opts.outdir,"$BN"),"${BN}.dat")} --sources {opts.sources} --duration {opts.duration:.2f} --no-rj --cheat --sim-noise --noiseseed 638541 --samples {opts.samples} --rundir {os.path.join(opts.outdir,"$BN")}\n')
+    job.write(f'srun ./gb_mcmc --inj {os.path.join(os.path.join(opts.outdir,"$BN"),"${BN}.dat")} --sources {opts.sources} --duration {opts.duration:.2f} --no-rj --cheat --sim-noise --noiseseed 638541 --samples {opts.samples} --rundir {os.path.join(opts.outdir,"$BN")} --threads {threads}\n')
