@@ -1,32 +1,24 @@
 import os
+import json
 import argparse
 import subprocess
-import json
 
 import numpy as np
-np.random.seed(0)
-
-import matplotlib
-#matplotlib.rc('text', usetex=True)
-matplotlib.use('Agg')
-font = {'family' : 'normal',
-        'size'   : 18}
-matplotlib.rc('font', **font)
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import cm
-import matplotlib.gridspec as gridspec
-from matplotlib import patches
-from matplotlib.patches import Rectangle
-from matplotlib.collections import PatchCollection
-
-import scipy.stats as ss
-import corner
 import pymultinest
-import simulate_binaryobs_gwem as sim
-import glob
+import scipy.stats as ss
 from scipy.interpolate import InterpolatedUnivariateSpline as ius
 
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('Agg')
+font = {'family':'normal','size':18}
+matplotlib.rc('font', **font)
+import corner
+
+import simulate_binaryobs_gwem as sim
 from common import basic_model_pdot, pdot_phasefold, DEFAULT_INJECTION_PARAMETERS
+
+np.random.seed(46692)
 
 # constants (SI units)
 G = 6.67e-11 # grav constant (m^3/kg/s^2)
@@ -134,45 +126,42 @@ def fdotgw(f0, mchirp):
 #    return (m1*m2)**(3/5.)/(m1+m2)**(1/5.)*msun
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--outdir", default="out-gwprior")
+parser.add_argument("--outdir", default="out-gwprior", help="Path to output directory")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
-parser.add_argument("--chainsdir", default='/home/cough052/joh15016/gwemlisa/data/results', help="Binaries directory")
-parser.add_argument("--binary", type=int, help="Binary number")
-parser.add_argument("--numobs", default=10, type=int, help="Number of obsevations")
-parser.add_argument("--mean-dt", default=365., type=float, help="Mean time between observations")
-parser.add_argument("--std-dt", default=2., type=float, help="Standard deviation of time between observations")
-#parser.add_argument("--samples-per-peak", default=10.0, type=float)
-#parser.add_argument("--phase-bins", default=20, type=int)
-parser.add_argument("--gwprior", action="store_true")
+parser.add_argument("--chainsdir", default='/home/cough052/joh15016/gwemlisa/data/results', 
+        help="Path to binaries directory")
+parser.add_argument("--binary", type=int, help="Binary indexing number")
+parser.add_argument("--numobs", default=25, type=int, help="Number of obsevations")
+parser.add_argument("--mean-dt", default=120., type=float, help="Mean time between observations")
+parser.add_argument("--std-dt", default=5., type=float, help="Standard deviation of time between observations")
+parser.add_argument("--gwprior", action="store_true", help="Enables gwprior")
 parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
-parser.add_argument("--periodfind", action="store_true")        
-
+parser.add_argument("--periodfind", action="store_true", help="Enables periodfind")       
+parser.add_argument("--test", action="store_true", help="Enable temporary test parameters")
 args = parser.parse_args()
 
 data_out = {}
 data_out["t0"] = {}
 data_out["inc"] = {}
 
-binaries = [b for b in os.listdir(args.chainsdir)]
-binary = os.path.join(args.chainsdir, binaries[args.binary-1])
+if args.test:
+    binaryname = "binary001"
+    f, fdot, col, lon, amp, incl, pol, phase = \
+    0.002820266, 2.10334e-17, 1.40157, 4.66848, 2.07938e-23, 1.86512, 1.33296, 0.634247
+else:
+    binary = os.path.join(args.chainsdir, os.listdir(args.chainsdir)[args.binary-1])
+    binaryname = os.path.basename(os.path.normpath(binary))
+    f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(os.path.join(binary, f"{binaryname}.dat"))
+    
 wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
 spl = ius(mass,radius)
-    
-binaryname = binary.split("/")[-1].replace(".dat","")
-binaryfile = os.path.join(binary, f"{binaryname}.dat")
-f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(binaryfile)
-incl = incl*180/np.pi
+
+incl = 90 - np.abs(np.degrees(incl) - 90)
 massratio = np.random.rand()*0.5 + 0.5
 b = sim.BinaryGW(f,fdot,1/massratio)
-
-#p0 = 414.7915404/(60*60*24.)
-#pdot = 2.373e-11
-#f0 = 2./p0/(60*60*24.)
-#fdotem = 2.*pdot/p0**2/(60*60*24.)**2
-#b = sim.BinaryGW(f0,fdotem,1)
 
 #mass1 = np.random.normal(0.6,0.085)
 #mass2 = (6**(1/3)*b.mchirp**(5/3)*(2*3**(1/3)*b.mchirp**(5/3)+2**(1/3)*(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(2/3)))/(9*mass1**(5/2)+np.sqrt(81*mass1**5-12*b.mchirp**5))**(1/3)*1/(6*mass1**(3/2))
@@ -208,12 +197,10 @@ if args.periodfind:
     mean_dt, std_dt = 3.0, 0.5
     numobs = 1000
     
-    #t = np.zeros(args.numobs)
     t = np.zeros(numobs)
     t[0] = o.obstimes[0]
     for i in range(len(t)):
         if i != 0:
-            #t[i] += t[i-1] + np.abs(np.random.normal(args.mean_dt,args.std_dt,1))
             t[i] += t[i-1] + np.abs(np.random.normal(mean_dt,std_dt))
     t = t - np.min(t)
 
@@ -224,7 +211,6 @@ if args.periodfind:
     fmin, fmax = 2/baseline, 480
     samples_per_peak = 10.0
     df = 1./(samples_per_peak * baseline)
-    #df = 1./(args.samples_per_peak * baseline)
     fmin, fmax = 1/period - 100*df, 1/period + 100*df
     nf = int(np.ceil((fmax - fmin) / df))
     freqs = fmin + df * np.arange(nf)
@@ -241,7 +227,6 @@ if args.periodfind:
     from periodfind.aov import AOV
     phase_bins = 20.0
     aov = AOV(phase_bins)
-    #aov = AOV(args.phase_bins)
 
     data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test,
                         output='periodogram')
@@ -265,7 +250,6 @@ if args.periodfind:
         ii = ii - 1
     
     err = np.mean([periods[jj]-low_side, high_side-periods[jj]])/periods[jj]
-
     print('Average error bar: {err:.10f}')
 
 data_out = {}
@@ -284,15 +268,13 @@ for ii, row in enumerate(data):
     simfile = f"{args.outdir}/{binaryname}/{filelabel}.dat"
     if not os.path.isfile(simfile):
         cmd = (
-            f"python simulate_lightcurve.py "
+            f"python simulate_lightcurve.py --plot "
             f"--outdir {args.outdir}/{binaryname} --incl {incl} "
-            f"--label {label} --t-zero {tzero} "
-            f"--period {period} --err-lightcurve "
-            f"../data/JulyChimeraBJD.csv -m {args.error_multiplier} "
-            f"-q {massratio} --radius1 {rad1} --radius2 {rad2}"
+            f"--label {label} --t-zero {tzero} --period {period} "
+            f"--err-lightcurve ../data/JulyChimeraBJD.csv "
+            f"-m {args.error_multiplier} -q {massratio} "
+            f"--radius1 {rad1} --radius2 {rad2} "
         )
-        if args.plot:
-            cmd += " --plot"
         subprocess.run([cmd], shell=True)
 
     jsonfile = (
@@ -304,20 +286,20 @@ for ii, row in enumerate(data):
     else:
         jsonfile += f"EM-prior_result"
 
-    chainfile = binary+'/chains/dimension_chain.dat.1'
-
     postfile = f"{args.outdir}/{binaryname}/{jsonfile}.json"
     if not os.path.isfile(postfile):
         cmd = (
             f"python analyse_lightcurve.py "
             f"--outdir {args.outdir}/{binaryname} "
-            f"--lightcurve {simfile} "
-            f"--t-zero {tzero} --period {period} --incl {incl} "
+            f"--lightcurve {simfile} --t-zero {tzero} "
+            f"--period {period} --incl {incl} -q {massratio} "
+            f"--radius1 {rad1} --radius2 {rad2} "
         )
         if args.gwprior:
-            cmd += f" --gw-chain {chainfile}"
+            chainfile = os.path.join(binary, '/chains/dimension_chain.dat.1')
+            cmd += f"--gw-chain {chainfile} "
             if args.gw_prior_type:
-                cmd += f" --gw-prior-type {args.gw_prior_type}"
+                cmd += f"--gw-prior-type {args.gw_prior_type} "
         subprocess.run([cmd], shell=True)
 
     with open(postfile) as json_file:

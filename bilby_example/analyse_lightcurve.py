@@ -68,9 +68,8 @@ def add_gw_prior(args, prior):
     pts = data_out[:, :]
 
     # Extract samples from the GW prior chains
-    # Greg: I'm not 100% about the conversions here
     period_prior_vals = 2 * (1.0 / pts[:, 0]) / 86400.0
-    inclination_prior_vals = np.arccos(pts[:, 3]) * 360.0 / (2 * np.pi)
+    inclination_prior_vals = 90 - np.abs(np.degrees(np.arccos(pts[:, 3])) - 90)
 
     # Convert the samples into priors
     if args.gw_prior_type == "old":
@@ -117,14 +116,13 @@ parser.add_argument("-o", "--outdir", default=None, help="Path to the ouput dire
 parser.add_argument("-l", "--lightcurve", type=str)
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
-parser.add_argument("--gw-prior-type", help="GW prior type",
-                    choices=["old", "kde", "samples"], default="kde")
-parser.add_argument(
-    "-i", "--incl", default=90, type=float, help="Inclination")
-parser.add_argument(
-    "--period", default=0.004, type=float, help="period")
-parser.add_argument(
-    "--t-zero", default=563041, type=float, help="t-zero")
+parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
+parser.add_argument("-i", "--incl", default=90, type=float, help="Inclination")
+parser.add_argument("--period", default=0.004, type=float, help="period")
+parser.add_argument("--t-zero", default=563041, type=float, help="t-zero")
+parser.add_argument("-q", "--massratio", default=0.4, type=float, help="mass ratio")
+parser.add_argument("-r", "--radius1", default=0.125, type=float, help="radius 1")
+parser.add_argument("-s", "--radius2", default=0.3, type=float, help="radius 2")
 args, _ = parser.parse_known_args()
 
 label = os.path.basename(args.lightcurve.rstrip('.dat'))
@@ -153,7 +151,7 @@ likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 
 # Set up the priors
 injection = DEFAULT_INJECTION_PARAMETERS
-injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero))
+injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero, q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")

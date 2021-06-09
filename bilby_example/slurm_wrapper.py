@@ -8,7 +8,7 @@ def parse_commandline():
     parser.add_option("--outdir", default="out-gwprior")
     parser.add_option("--numobs", type=int, default=25)
     parser.add_option("--mean-dt", type=float, default=120.0)
-    parser.add_option("--std-dt", type=float, default=2.0)
+    parser.add_option("--std-dt", type=float, default=5.0)
     parser.add_option("--gwprior", action="store_true")
     parser.add_option("--gw-prior-type", choices=["old", "kde", "samples"], default="kde")
     parser.add_option("--periodfind", action="store_true")
@@ -17,7 +17,7 @@ def parse_commandline():
 
 opts = parse_commandline()
 
-cmd = f'python run_lightcurve_modeling_for_gbfisher_ztfperiodic.py --plot --outdir {opts.outdir} --chainsdir {opts.chainsdir} --binary $SLURM_ARRAY_TASK_ID --numobs {opts.numobs} --mean-dt {opts.mean_dt} --std-dt {opts.std_dt} '
+cmd = f'python run_lightcurve_modeling_for_gbfisher_ztfperiodic.py --outdir {opts.outdir} --chainsdir {opts.chainsdir} --binary $SLURM_ARRAY_TASK_ID --numobs {opts.numobs} --mean-dt {opts.mean_dt} --std-dt {opts.std_dt} '
 if opts.gwprior:
     cmd += f'--gwprior --gw-prior-type {opts.gw_prior_type} '
 if opts.periodfind:
@@ -28,7 +28,7 @@ with open(os.path.join(opts.jobdir,'jobGWEMLISA.txt'),'w') as job:
     job.write('#SBATCH --job-name=GWEMLISA\n')
     job.write('#SBATCH --mail-type=ALL\n')
     job.write('#SBATCH --mail-user=joh15016@umn.edu\n')
-    job.write('#SBATCH --time=8:59:59\n')
+    job.write('#SBATCH --time=7:59:59\n')
     job.write('#SBATCH --nodes=1\n')
     job.write('#SBATCH --ntasks=1\n')
     job.write('#SBATCH --cpus-per-task=1\n')
