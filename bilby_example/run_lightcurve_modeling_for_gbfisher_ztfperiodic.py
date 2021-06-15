@@ -185,7 +185,7 @@ if args.periodfind:
     period = 2 * (1.0 / b.f0) / 86400.0
     # Set up the full set of injection_parameters
     injection_parameters = DEFAULT_INJECTION_PARAMETERS
-    injection_parameters["incl"] = 90
+    injection_parameters["cos_incl"] = 0
     injection_parameters["period"] = period
     injection_parameters["t_zero"] = o.obstimes[0]
     injection_parameters["scale_factor"] = 1
@@ -306,7 +306,7 @@ for ii, row in enumerate(data):
         post_out = json.load(json_file)
 
     idx = post_out["parameter_labels"].index("$t_0$")
-    idx2 = post_out["parameter_labels"].index("$\\iota$")
+    idx2 = post_out["parameter_labels"].index("$\\cos(\\iota)$")
     t_0, inc = [], []
     for row in post_out["samples"]["content"]:
         t_0.append(row[idx])

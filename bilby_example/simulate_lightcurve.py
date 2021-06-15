@@ -63,7 +63,7 @@ ydata = y[idxs]
 
 # Set up the full set of injection_parameters
 injection_parameters = DEFAULT_INJECTION_PARAMETERS
-injection_parameters["incl"] = args.incl
+injection_parameters["cos_incl"] = np.cos(np.radians(args.incl))
 injection_parameters["period"] = args.period
 injection_parameters["t_zero"] = args.t_zero
 injection_parameters["scale_factor"] = np.mean(ydata)

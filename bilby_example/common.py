@@ -76,8 +76,9 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
             raise ValueError('Sigma must be either float or array-like x.')
 
 
-def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
-                heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp):
+def basic_model(t_obs, radius_1, radius_2, sbratio, t_zero, q, period,
+                heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp,
+                cos_incl):
     """ A function which returns model values at times t for parameters pars
 
     input:
@@ -88,6 +89,8 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
         m    a 1D array with model values at times t
 
     """
+
+    incl=np.degrees(np.arccos(cos_incl))
 
     grid = "very_sparse"
     exact_grav = False

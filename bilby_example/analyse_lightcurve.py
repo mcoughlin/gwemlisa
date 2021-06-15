@@ -2,7 +2,7 @@ import argparse
 import os
 
 import bilby
-from bilby.core.prior import Uniform, Normal
+from bilby.core.prior import Uniform, Normal, Cosine
 import numpy as np
 import scipy
 
@@ -151,7 +151,7 @@ likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 
 # Set up the priors
 injection = DEFAULT_INJECTION_PARAMETERS
-injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero, q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
+injection.update(dict(period=args.period, cos_incl=np.cos(np.radians(args.incl)), t_zero=args.t_zero, q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")
@@ -174,13 +174,14 @@ if args.gw_chain:
     label += "_GW-prior-{}".format(args.gw_prior_type)
 else:
     # EM prior
-    priors["incl"] = Uniform(0, 90, "incl", latex_label=r"$\iota$")
+    priors["cos_incl"] = Uniform(0, 1, "cos_incl", latex_label=r"$\cos(\iota)$")
     priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     label += "_EM-prior"
 
 meta_data = dict(lightcurve=args.lightcurve)
+print(priors)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=250,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-injection = {key: injection[key] for key in ["t_zero", "period", 'incl', 'q', 'radius_1', 'radius_2']}
+injection = {key: injection[key] for key in ["t_zero", "period", 'cos_incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)
