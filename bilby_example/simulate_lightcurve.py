@@ -1,38 +1,24 @@
 """ Simulate a lightcurve and optionally create a plot """
 import argparse
 import os
-
 import matplotlib.pyplot as plt
 import numpy as np
-
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS
-
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-o", "--outdir", default="data", help="Path to the ouput directory")
-parser.add_argument(
-    "-l", "--label", default='A', help="A label for the ouput")
-parser.add_argument(
-    "-i", "--incl", default=90, type=float, help="Inclination")
-parser.add_argument(
-    "--period", default=0.004, type=float, help="period")
-parser.add_argument(
-    "--t-zero", default=563041, type=float, help="t-zero")
-parser.add_argument(
-    "-q", "--massratio", default=0.4, type=float, help="mass ratio")
-parser.add_argument(
-    "-r", "--radius1", default=0.125, type=float, help="radius 1")
-parser.add_argument(
-    "-s", "--radius2", default=0.3, type=float, help="radius 2")
-parser.add_argument(
-    "-m", "--error-multiplier", default=0.1)
-parser.add_argument(
-    "--err-lightcurve", default="../data/JulyChimeraBJD.csv",
-    help="Path to the lightcurve file to use for times and uncertainties")
-parser.add_argument(
-    "--plot", action="store_true", help="Generate a plot of the data")
+parser.add_argument("-o", "--outdir", default="data", help="path to the ouput directory")
+parser.add_argument("-l", "--label", default='A', help="a label for the ouput")
+parser.add_argument("-i", "--incl", default=90, type=float, help="inclination (degrees)")
+parser.add_argument("--period", default=0.004, type=float, help="period (days)")
+parser.add_argument("--t-zero", default=563041, type=float, help="t-zero")
+parser.add_argument("-q", "--massratio", default=0.4, type=float, help="mass ratio")
+parser.add_argument("-r", "--radius1", default=0.125, type=float, help="radius 1")
+parser.add_argument("-s", "--radius2", default=0.3, type=float, help="radius 2")
+parser.add_argument("-m", "--error-multiplier", default=0.1)
+parser.add_argument("--err-lightcurve", default="../data/JulyChimeraBJD.csv",
+    help="path to the lightcurve file to use for times and uncertainties")
+parser.add_argument("--plot", action="store_true", help="generate a plot of the data")
 args = parser.parse_args()
 
 # Check the output directory exists
@@ -40,7 +26,7 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Set up a label
-label = "data_{}_incl{}_errormultiplier{}".format(args.label, args.incl, args.error_multiplier)
+label = f"data_{args.label}_incl{args.incl}"
 
 # Read in real lightcurve to get the typical time and uncertainties
 lightcurveFile = os.path.join(args.err_lightcurve)
@@ -75,9 +61,8 @@ injection_parameters["radius_2"] = args.radius2
 ydata = basic_model(time, **injection_parameters)
 
 # Write the lightcurve to file
-filename = "{}/{}.dat".format(args.outdir, label)
-np.savetxt(filename, np.array([time, ydata, dy]).T, fmt="%6.15g",
-           header="MJD flux flux_uncertainty")
+filename = f"{args.outdir}/{label}.dat"
+np.savetxt(filename, np.array([time, ydata, dy]).T, fmt="%6.15g", header="MJD flux flux_uncertainty")
 
 # Generate a plot of the data
 if args.plot:
@@ -88,6 +73,6 @@ if args.plot:
     plt.xlabel('time')
     plt.plot(time, basic_model(time, **injection_parameters), zorder=4)
     plt.errorbar(time, basic_model(time, **injection_parameters), dy)
-    plotName = "{}/{}_plot.png".format(args.outdir, label)
+    plotName = f"{args.outdir}/{label}_plot.png"
     plt.savefig(plotName)
     plt.close()

@@ -89,9 +89,9 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, t_zero, q, period,
         m    a 1D array with model values at times t
 
     """
-
+    
     incl=np.degrees(np.arccos(cos_incl))
-
+    
     grid = "very_sparse"
     exact_grav = False
     verbose = 0

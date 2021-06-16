@@ -1,13 +1,12 @@
-import argparse
 import os
+import argparse
+
+import numpy as np
+import scipy
+import matplotlib.pyplot as plt
 
 import bilby
 from bilby.core.prior import Uniform, Normal, Cosine
-import numpy as np
-import scipy
-
-import matplotlib.pyplot as plt
-
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
@@ -69,14 +68,14 @@ def add_gw_prior(args, prior):
 
     # Extract samples from the GW prior chains
     period_prior_vals = 2 * (1.0 / pts[:, 0]) / 86400.0
-    inclination_prior_vals = 90 - np.abs(np.degrees(np.arccos(pts[:, 3])) - 90)
+    inclination_prior_vals = 90 - abs(np.degrees(np.arccos(pts[:, 3])) - 90)
 
     # Convert the samples into priors
     if args.gw_prior_type == "old":
         priors["incl"] = Uniform(
             np.min(inclination_prior_vals),
             np.max(inclination_prior_vals),
-            "incl",
+            "cos_incl",
             latex_label=r"$\iota$"
         )
         priors["period"] = Normal(
@@ -109,27 +108,27 @@ def add_gw_prior(args, prior):
         )
     return priors
 
-
 # Set up the argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outdir", default=None, help="Path to the ouput directory")
-parser.add_argument("-l", "--lightcurve", type=str)
+parser.add_argument("-o", "--outdir", default=None, help="path to the ouput directory")
+parser.add_argument("-l", "--lightcurve", type=str, help="path to lightcurve")
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
 parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
-parser.add_argument("-i", "--incl", default=90, type=float, help="Inclination")
-parser.add_argument("--period", default=0.004, type=float, help="period")
+parser.add_argument("-i", "--incl", default=90, type=float, help="inclination (degrees)")
+parser.add_argument("--period", default=0.004, type=float, help="period (days)")
 parser.add_argument("--t-zero", default=563041, type=float, help="t-zero")
 parser.add_argument("-q", "--massratio", default=0.4, type=float, help="mass ratio")
 parser.add_argument("-r", "--radius1", default=0.125, type=float, help="radius 1")
 parser.add_argument("-s", "--radius2", default=0.3, type=float, help="radius 2")
-args, _ = parser.parse_known_args()
+parser.add_argument("--nlive", default=250, type=int, help="number of live points used for sampling")
+args = parser.parse_args()
 
 label = os.path.basename(args.lightcurve.rstrip('.dat'))
 
 # The output directory is based on the input lightcurve
 if args.outdir is None:
-    args.outdir = "outdir_{}".format(label)
+    args.outdir = f"outdir_{label}"
 
 if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
@@ -149,9 +148,10 @@ else:
 # Set up the likelihood
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 
-# Set up the priors
+# Set up the priorsinjection = DEFAULT_INJECTION_PARAMETERS
 injection = DEFAULT_INJECTION_PARAMETERS
-injection.update(dict(period=args.period, cos_incl=np.cos(np.radians(args.incl)), t_zero=args.t_zero, q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
+injection.update(dict(period=args.period, cos_incl=np.cos(np.radians(args.incl)), t_zero=args.t_zero, 
+        q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")
@@ -163,15 +163,12 @@ priors["radius_2"] = Uniform(0, 1, "radius_2")
 # priors["ldc_2"] = Uniform(0, 1, "ldc_2")
 # priors["gdc_2"] = Uniform(0, 1, "gdc_2")
 priors["scale_factor"] = Uniform(0, np.max(ydata), "scale_factor", latex_label="scale factor")
-priors["t_zero"] = Uniform(
-    args.t_zero - args.period / 2,
-    args.t_zero + args.period / 2,
-    "t_zero", latex_label="$t_0$")
+priors["t_zero"] = Uniform(args.t_zero-args.period/2, args.t_zero+args.period/2,"t_zero", latex_label="$t_0$")
 
 # If we want a GW-based prior, set it up, else use the EM prior
 if args.gw_chain:
     priors = add_gw_prior(args, priors)
-    label += "_GW-prior-{}".format(args.gw_prior_type)
+    label += f"_GW-prior-{args.gw_prior_type}"
 else:
     # EM prior
     priors["cos_incl"] = Uniform(0, 1, "cos_incl", latex_label=r"$\cos(\iota)$")
@@ -181,7 +178,7 @@ else:
 meta_data = dict(lightcurve=args.lightcurve)
 print(priors)
 result = bilby.run_sampler(
-    likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=250,
+    likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=args.nlive,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-injection = {key: injection[key] for key in ["t_zero", "period", 'cos_incl', 'q', 'radius_1', 'radius_2']}
+injection = {key: injection[key] for key in ['t_zero', 'period', 'cos_incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)
