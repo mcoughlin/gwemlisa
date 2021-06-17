@@ -3,7 +3,7 @@ import optparse
 
 def parse_commandline():
     parser = optparse.OptionParser()
-    parser.add_option("--jobname", default=GWEMLISA, help="Name of job script"
+    parser.add_option("--jobname", default=GWEMLISA, help="Name of job script")
     parser.add_option("--jobdir", default="/home/cough052/joh15016/jobs/gwemlisa", 
             help="Path to job script directory")
     parser.add_option("--chainsdir", default="/home/cough052/joh15016/gwemlisa/data/results", 

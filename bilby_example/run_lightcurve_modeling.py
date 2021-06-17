@@ -134,7 +134,7 @@ if args.periodfind:
     period = 2 * (1.0 / b.f0) / 86400.0
     # Set up the full set of injection_parameters
     injection_parameters = DEFAULT_INJECTION_PARAMETERS
-    injection_parameters["cos_incl"] = 0
+    injection_parameters["incl"] = 90
     injection_parameters["period"] = period
     injection_parameters["t_zero"] = o.obstimes[0]
     injection_parameters["scale_factor"] = 1
@@ -241,15 +241,20 @@ for ii, row in enumerate(data):
         post_out = json.load(json_file)
 
     idx = post_out["parameter_labels"].index("$t_0$")
-    print(post_out["parameter_labels"])
-    idx2 = post_out["parameter_labels"].index("$\\cos(\\iota)$")
+    if args.gwprior:
+        idx2 = post_out["parameter_labels"].index("$\\iota$")
+    else:
+        idx2 = post_out["parameter_labels"].index("$\\cos(\\iota)$")
     
     t_0, inc = [], []
     for row in post_out["samples"]["content"]:
         t_0.append(row[idx])
         inc.append(row[idx2])
     data_out["t0"][ii] = np.array(t_0)
-    data_out["inc"][ii] = np.degrees(np.arccos(np.array(inc)))
+    if args.gwprior:
+        data_out["inc"][ii] = np.array(inc)
+    else:
+        data_out["inc"][ii] = np.degrees(np.arccos(np.array(inc)))
 
     print('')
     print(f'T0 true: {tzero * 86400:.10f}')
