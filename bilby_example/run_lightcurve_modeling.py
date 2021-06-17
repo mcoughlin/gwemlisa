@@ -241,6 +241,7 @@ for ii, row in enumerate(data):
         post_out = json.load(json_file)
 
     idx = post_out["parameter_labels"].index("$t_0$")
+    print(post_out["parameter_labels"])
     idx2 = post_out["parameter_labels"].index("$\\cos(\\iota)$")
     
     t_0, inc = [], []

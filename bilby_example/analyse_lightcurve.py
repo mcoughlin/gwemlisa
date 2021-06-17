@@ -6,7 +6,7 @@ import scipy
 import matplotlib.pyplot as plt
 
 import bilby
-from bilby.core.prior import Uniform, Normal, Cosine
+from bilby.core.prior import Uniform, Normal, Constraint
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
@@ -68,15 +68,15 @@ def add_gw_prior(args, prior):
 
     # Extract samples from the GW prior chains
     period_prior_vals = 2 * (1.0 / pts[:, 0]) / 86400.0
-    inclination_prior_vals = 90 - abs(np.degrees(np.arccos(pts[:, 3])) - 90)
+    inclination_prior_vals = np.abs(np.arccos(pts[:, 3]))
 
     # Convert the samples into priors
     if args.gw_prior_type == "old":
-        priors["incl"] = Uniform(
+        priors["cos_incl"] = Uniform(
             np.min(inclination_prior_vals),
             np.max(inclination_prior_vals),
             "cos_incl",
-            latex_label=r"$\iota$"
+            latex_label=r"$\cos(\iota)$"
         )
         priors["period"] = Normal(
             np.mean(period_prior_vals),
@@ -85,10 +85,10 @@ def add_gw_prior(args, prior):
             latex_label="$P_0$"
         )
     elif args.gw_prior_type == "samples":
-        priors["incl"] = SamplesPrior(
+        priors["cos_incl"] = SamplesPrior(
             inclination_prior_vals,
-            "incl",
-            latex_label=r"$\iota$"
+            "cos_incl",
+            latex_label=r"$\cos(\iota)$"
         )
         priors["period"] = SamplesPrior(
             period_prior_vals,
@@ -96,10 +96,10 @@ def add_gw_prior(args, prior):
             latex_label="$p_0$"
         )
     elif args.gw_prior_type == "kde":
-        priors["incl"] = KDEPrior(
+        priors["cos_incl"] = KDEPrior(
             inclination_prior_vals,
-            "incl",
-            latex_label=r"$\iota$"
+            "cos_incl",
+            latex_label=r"$\cos(\iota)$"
         )
         priors["period"] = KDEPrior(
             period_prior_vals,
@@ -148,20 +148,20 @@ else:
 # Set up the likelihood
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 
-# Set up the priorsinjection = DEFAULT_INJECTION_PARAMETERS
+def convert_cos_incl(parameters):
+    converted_parameters = parameters.copy()
+    converted_parameters["const_cos_incl"] = parameters["cos_incl"]
+    return converted_parameters
+
+# Set up the priors
 injection = DEFAULT_INJECTION_PARAMETERS
 injection.update(dict(period=args.period, cos_incl=np.cos(np.radians(args.incl)), t_zero=args.t_zero, 
         q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
-priors = bilby.core.prior.PriorDict()
+priors = bilby.core.prior.PriorDict(conversion_function=convert_cos_incl)
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")
 priors["radius_1"] = Uniform(0, 1, "radius_1")
 priors["radius_2"] = Uniform(0, 1, "radius_2")
-# priors["sbratio"] = Uniform(0, 1, "sbratio")
-# priors["heat2"] = Uniform(0, 10, "heat2")
-# priors["ldc_1"] = Uniform(0, 1, "ldc_1")
-# priors["ldc_2"] = Uniform(0, 1, "ldc_2")
-# priors["gdc_2"] = Uniform(0, 1, "gdc_2")
 priors["scale_factor"] = Uniform(0, np.max(ydata), "scale_factor", latex_label="scale factor")
 priors["t_zero"] = Uniform(args.t_zero-args.period/2, args.t_zero+args.period/2,"t_zero", latex_label="$t_0$")
 
@@ -174,6 +174,7 @@ else:
     priors["cos_incl"] = Uniform(0, 1, "cos_incl", latex_label=r"$\cos(\iota)$")
     priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     label += "_EM-prior"
+priors["const_cos_incl"] = Constraint(minimum=0, maximum=1)
 
 meta_data = dict(lightcurve=args.lightcurve)
 print(priors)

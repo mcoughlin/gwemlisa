@@ -46,8 +46,8 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
             self.parameters['sigma'] = None
 
     def log_likelihood(self):
-        log_l = np.sum(- (self.residual / self.sigma)**2 / 2 -
-                       np.log(2 * np.pi * self.sigma**2) / 2)
+        log_l = np.sum(- (self.residual / self.sigma)**2 / 2 - 
+                np.log(2 * np.pi * self.sigma**2) / 2)
         return np.nan_to_num(log_l)
 
     def __repr__(self):
@@ -89,7 +89,9 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, t_zero, q, period,
         m    a 1D array with model values at times t
 
     """
-    
+    if cos_incl > 1:
+        print(cos_incl)
+
     incl=np.degrees(np.arccos(cos_incl))
     
     grid = "very_sparse"
