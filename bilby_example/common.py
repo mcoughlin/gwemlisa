@@ -78,64 +78,18 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
 
 def basic_model(t_obs, radius_1, radius_2, sbratio, t_zero, q, period,
                 heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp,
-                cos_incl):
-    """ A function which returns model values at times t for parameters pars
-
-    input:
-        t    a 1D array with times
-        pars a 1D array with parameter values; r1,r2,J,i,t0,p
-
-    output:
-        m    a 1D array with model values at times t
-
-    """
-    incl=np.degrees(np.arccos(cos_incl))
-    
-    grid = "very_sparse"
-    exact_grav = False
-    verbose = 0
-    shape_1="sphere"
-    shape_2="roche"
-    try:
-        m = ellc.lc(
-            t_obs=t_obs,
-            radius_1=radius_1,
-            radius_2=radius_2,
-            sbratio=sbratio,
-            incl=incl,
-            t_zero=t_zero,
-            q=q,
-            period=period,
-            shape_1=shape_1,
-            shape_2=shape_2,
-            ldc_1=ldc_1,
-            ldc_2=ldc_2,
-            gdc_2=gdc_2,
-            f_c=f_c,
-            f_s=f_s,
-            t_exp=t_exp,
-            grid_1=grid,
-            grid_2=grid,
-            heat_2=heat_2,
-            exact_grav=exact_grav,
-            verbose=verbose)
-        m *= scale_factor
-    except Exception as e:
-        return t_obs * 10**99
-
-    return m
-
-def basic_model_gw(t_obs, radius_1, radius_2, sbratio, t_zero, q, period,
-                heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp,
                 incl):
     """ A function which returns model values at times t for parameters pars
+
     input:
         t    a 1D array with times
         pars a 1D array with parameter values; r1,r2,J,i,t0,p
+
     output:
         m    a 1D array with model values at times t
+
     """
-    
+        
     grid = "very_sparse"
     exact_grav = False
     verbose = 0

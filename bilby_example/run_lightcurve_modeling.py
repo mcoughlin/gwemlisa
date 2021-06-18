@@ -241,20 +241,14 @@ for ii, row in enumerate(data):
         post_out = json.load(json_file)
 
     idx = post_out["parameter_labels"].index("$t_0$")
-    if args.gwprior:
-        idx2 = post_out["parameter_labels"].index("$\\iota$")
-    else:
-        idx2 = post_out["parameter_labels"].index("$\\cos(\\iota)$")
+    idx2 = post_out["parameter_labels"].index("$\\iota$")
     
     t_0, inc = [], []
     for row in post_out["samples"]["content"]:
         t_0.append(row[idx])
         inc.append(row[idx2])
     data_out["t0"][ii] = np.array(t_0)
-    if args.gwprior:
-        data_out["inc"][ii] = np.array(inc)
-    else:
-        data_out["inc"][ii] = np.degrees(np.arccos(np.array(inc)))
+    data_out["inc"][ii] = np.array(inc)
 
     print('')
     print(f'T0 true: {tzero * 86400:.10f}')

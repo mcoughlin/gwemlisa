@@ -6,8 +6,8 @@ import scipy
 import matplotlib.pyplot as plt
 
 import bilby
-from bilby.core.prior import Uniform, Normal, Constraint
-from common import basic_model, basic_model_gw, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
+from bilby.core.prior import Uniform, Normal
+from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
 
 class SamplesPrior(bilby.core.prior.Prior):
@@ -56,6 +56,25 @@ class KDEPrior(bilby.core.prior.Prior):
     def prob(self, val):
         return self.kde.pdf(val)
 
+class Uniform_Cosine_Prior(bilby.core.prior.Prior):
+    def __init__(self, minimum = 0, maximum = 90, name=None, latex_label=None, unit=None, boundary=None):
+        super(Uniform_Cosine_Prior, self).__init__(minimum=minimum, maximum=maximum, name=name, 
+                latex_label=latex_label, unit=unit, boundary=boundary)
+
+    def rescale(self, val):
+        norm = 1 / (np.cos(np.radians(self.minimum)) - np.cos(np.radians(self.maximum)))
+        return np.degrees(np.arccos(np.cos(np.radians(self.minimum)) - val / norm))
+
+    def prob(self, val):
+        return np.sin(np.radians(val)) / 2 * self.is_in_prior_range(val)
+
+    def cdf(self, val):
+        _cdf = np.atleast_1d((np.cos(np.radians(val)) - np.cos(np.radians(self.minimum))) / 
+                    (np.cos(np.radians(self.maximum)) - np.cos(np.radians(self.minimum))))
+        _cdf[val > self.maximum] = 1
+        _cdf[val < self.minimum] = 0
+        return _cdf
+
 
 def add_gw_prior(args, prior):
     """ Adds a GW-prior based on the gw_chain file"""
@@ -68,11 +87,8 @@ def add_gw_prior(args, prior):
 
     # Extract samples from the GW prior chains
     period_prior_vals = 2 * (1.0 / pts[:, 0]) / 86400.0
-    if args.gw_chain:
-        inclination_prior_vals = 90 - np.abs(np.degrees(np.arccos(pts[:, 3])) - 90)
-    else:
-        inclination_prior_vals = np.abs(np.arccos(pts[:, 3]))
-
+    inclination_prior_vals = 90 - np.abs(np.degrees(np.arccos(pts[:, 3])) - 90)
+    
     # Convert the samples into priors
     if args.gw_prior_type == "old":
         priors["incl"] = Uniform(
@@ -149,19 +165,12 @@ else:
     dy = data["flux_uncertainty"][::args.nthin]
 
 # Set up the likelihood
-if args.gw_chain:
-    likelihood = GaussianLikelihood(time, ydata, basic_model_gw, sigma=dy)
-else:
-    likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
+likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
 
 # Set up the priors
 injection = DEFAULT_INJECTION_PARAMETERS
-if args.gw_chain:
-    injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero,
-            q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
-else:
-    injection.update(dict(period=args.period, cos_incl=np.cos(np.radians(args.incl)), t_zero=args.t_zero, 
-            q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
+injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero,
+        q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in DEFAULT_INJECTION_PARAMETERS.items() if isinstance(val, (int, float))})
 priors["q"] = Uniform(0.5, 1, "q")
@@ -176,7 +185,7 @@ if args.gw_chain:
     label += f"_GW-prior-{args.gw_prior_type}"
 else:
     # EM prior
-    priors["cos_incl"] = Uniform(0, 1, "cos_incl", latex_label=r"$\cos(\iota)$")
+    priors["incl"] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$")
     priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
     label += "_EM-prior"
 
@@ -185,8 +194,5 @@ print(priors)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=args.nlive,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
-if args.gw_chain:
-    injection = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
-else:
-    injection = {key: injection[key] for key in ['t_zero', 'period', 'cos_incl', 'q', 'radius_1', 'radius_2']}
+injection = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)
