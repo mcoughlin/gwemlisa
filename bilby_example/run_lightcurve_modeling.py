@@ -18,6 +18,8 @@ import corner
 import simulate_binaryobs_gwem as sim
 from common import basic_model_pdot, pdot_phasefold, DEFAULT_INJECTION_PARAMETERS
 
+home = os.path.expanduser("~")
+
 # constants (SI units)
 G = 6.67e-11 # grav constant (m^3/kg/s^2)
 msun = 1.989e30 # solar mass (kg)
@@ -82,8 +84,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default="out-gwprior", help="Path to output directory")
 parser.add_argument("-m", "--error-multiplier", default=0.1, type=float)
 parser.add_argument("--every", default=1, type=int, help="Downsample of phase_freq.dat")
-parser.add_argument("--chainsdir", default='/home/cough052/joh15016/gwemlisa/data/results', 
-        help="Path to binaries directory")
+parser.add_argument("--chainsdir", default=f"{home}/gwemlisa/data/results", help="Path to binaries directory")
 parser.add_argument("--binary", type=int, help="Binary indexing number")
 parser.add_argument("--numobs", default=25, type=int, help="Number of obsevations")
 parser.add_argument("--mean-dt", default=120., type=float, help="Mean time between observations")
