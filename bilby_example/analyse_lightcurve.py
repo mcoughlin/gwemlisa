@@ -66,7 +66,9 @@ class Uniform_Cosine_Prior(bilby.core.prior.Prior):
         return np.degrees(np.arccos(np.cos(np.radians(self.minimum)) - val / norm))
 
     def prob(self, val):
-        return np.sin(np.radians(val)) / 2 * self.is_in_prior_range(val)
+        # Not exactly sure where the 2*pi/180 scaling comes from, but it seems to have fixed the issue
+        # Probably worth looking into
+        return (np.pi / 180.) * np.sin(np.radians(val)) * self.is_in_prior_range(val)
 
     def cdf(self, val):
         _cdf = np.atleast_1d((np.cos(np.radians(val)) - np.cos(np.radians(self.minimum))) / 
