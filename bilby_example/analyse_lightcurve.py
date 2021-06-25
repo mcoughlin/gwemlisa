@@ -66,8 +66,6 @@ class Uniform_Cosine_Prior(bilby.core.prior.Prior):
         return np.degrees(np.arccos(np.cos(np.radians(self.minimum)) - val / norm))
 
     def prob(self, val):
-        # Not exactly sure where the 2*pi/180 scaling comes from, but it seems to have fixed the issue
-        # Probably worth looking into
         return (np.pi / 180.) * np.sin(np.radians(val)) * self.is_in_prior_range(val)
 
     def cdf(self, val):
@@ -136,35 +134,29 @@ parser.add_argument("-l", "--lightcurve", type=str, help="path to lightcurve")
 parser.add_argument("--nthin", default=10, type=int)
 parser.add_argument("--gw-chain", help="GW chain file to use for prior")
 parser.add_argument("--gw-prior-type", help="GW prior type", choices=["old", "kde", "samples"], default="kde")
-parser.add_argument("-i", "--incl", default=90, type=float, help="inclination (degrees)")
+parser.add_argument("-i", "--incl", default=None, type=float, help="inclination (degrees)")
 parser.add_argument("--period", default=0.004, type=float, help="period (days)")
+parser.add_argument("--period-err", default=0.00001, type=float, help="period uncertainty (days)")
 parser.add_argument("--t-zero", default=563041, type=float, help="t-zero")
-parser.add_argument("-q", "--massratio", default=0.4, type=float, help="mass ratio")
-parser.add_argument("-r", "--radius1", default=0.125, type=float, help="radius 1")
-parser.add_argument("-s", "--radius2", default=0.3, type=float, help="radius 2")
+parser.add_argument("-q", "--massratio", default=None, type=float, help="mass ratio")
+parser.add_argument("-r", "--radius1", default=None, type=float, help="radius 1")
+parser.add_argument("-s", "--radius2", default=None, type=float, help="radius 2")
 parser.add_argument("--nlive", default=250, type=int, help="number of live points used for sampling")
 args = parser.parse_args()
 
-label = os.path.basename(args.lightcurve.rstrip('.dat'))
+label = os.path.splitext(os.path.basename(args.lightcurve))[0]
 
 # The output directory is based on the input lightcurve
 if args.outdir is None:
     args.outdir = f"outdir_{label}"
-
 if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Read in lightcurve to get the typical time and uncertainties
-if "csv" in args.lightcurve:
-    data = np.loadtxt(args.lightcurve)
-    time = data[::args.nthin, 0]
-    ydata = data[::args.nthin, -2]
-    dy = data[::args.nthin, -1]
-else:
-    data= np.genfromtxt(args.lightcurve, names=True)
-    time = data["MJD"][::args.nthin]
-    ydata = data["flux"][::args.nthin]
-    dy = data["flux_uncertainty"][::args.nthin]
+data = np.genfromtxt(args.lightcurve, names=True)
+time = data["MJD"][::args.nthin]
+ydata = data["flux"][::args.nthin]
+dy = data["fluxerr"][::args.nthin]
 
 # Set up the likelihood
 likelihood = GaussianLikelihood(time, ydata, basic_model, sigma=dy)
@@ -188,11 +180,10 @@ if args.gw_chain:
 else:
     # EM prior
     priors["incl"] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$")
-    priors["period"] = Normal(args.period, 1e-5, "period", latex_label="$P_0$")
+    priors["period"] = Normal(args.period, args.period_err, "period", latex_label="$P_0$")
     label += "_EM-prior"
 
 meta_data = dict(lightcurve=args.lightcurve)
-print(priors)
 result = bilby.run_sampler(
     likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=args.nlive,
     outdir=args.outdir, label=label, meta_data=meta_data, resume=True)

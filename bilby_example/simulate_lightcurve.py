@@ -62,7 +62,7 @@ ydata = basic_model(time, **injection_parameters)
 
 # Write the lightcurve to file
 filename = f"{args.outdir}/{label}.dat"
-np.savetxt(filename, np.array([time, ydata, dy]).T, fmt="%6.15g", header="MJD flux flux_uncertainty")
+np.savetxt(filename, np.array([time, ydata, dy]).T, fmt="%6.15g", header="MJD flux fluxerr")
 
 # Generate a plot of the data
 if args.plot:

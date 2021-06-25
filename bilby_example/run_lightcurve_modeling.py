@@ -105,10 +105,12 @@ if args.test:
     binaryname = "binary001"
     f, fdot, col, lon, amp, incl, pol, phase = \
     0.002820266, 2.10334e-17, 1.40157, 4.66848, 2.07938e-23, 1.86512, 1.33296, 0.634247
+    np.random.seed(0)
 else:
     binary = os.path.join(args.chainsdir, os.listdir(args.chainsdir)[args.binary-1])
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(os.path.join(binary, f"{binaryname}.dat"))
+    np.random.seed(args.binary)
 
 wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
 mass,radius=wd_eof[:,0],wd_eof[:,1]
@@ -164,8 +166,7 @@ if args.periodfind:
     fmin, fmax = 1/period - 100*df, 1/period + 100*df
     nf = int(np.ceil((fmax - fmin) / df))
     freqs = fmin + df * np.arange(nf)
-    periods = (1/freqs).astype(np.float32)
-    periods = np.sort(periods)
+    periods = np.sort((1/freqs).astype(np.float32))
     pdots_to_test = np.array([0, b.pdot*(60*60*24.)**2]).astype(np.float32)
 
     lc = (lc - np.min(lc))/(np.max(lc)-np.min(lc))
@@ -194,8 +195,10 @@ if args.periodfind:
             break
         ii = ii - 1
     
+    period = periods[jj]
     err = np.mean([periods[jj]-low_side, high_side-periods[jj]])/periods[jj]
-    print('Average error bar: {err:.10f}')
+    print(f'Period: {period:.10f}')
+    print(f'Average error bar: {err:.10f}')
 
 
 data_out = {}
@@ -208,8 +211,9 @@ for ii, row in enumerate(data):
 
     # Simulate binary lightcurve from true parameters
     label = f"{binaryname}row{ii}"
-    period = 2 * (1.0 / row[2]) / 86400.0
     tzero = row[0] + row[1] / 86400
+    if not args.periodfind:
+        period = 2 * (1.0 / row[2]) / 86400.0
 
     filelabel = f"data_{label}_incl{incl}"  
     simfile = f"{args.outdir}/{binaryname}/{filelabel}.dat"
@@ -233,6 +237,8 @@ for ii, row in enumerate(data):
             f"--lightcurve {simfile} --nlive {args.nlive} --t-zero {tzero} --incl {incl} "
             f"--period {period} --massratio {massratio} --radius1 {rad1} --radius2 {rad2}"
         )
+        if args.periodfind:
+            cmd += f" --period-err {err}"
         if args.gwprior:
             chainfile = os.path.join(binary, 'chains/dimension_chain.dat.1')
             cmd += f" --gw-chain {chainfile}"
