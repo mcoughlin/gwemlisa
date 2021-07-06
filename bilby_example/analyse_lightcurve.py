@@ -63,12 +63,12 @@ if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 
 # Read in lightcurve to get the times, fluxes,and flux uncertainties
-data = np.genfromtxt(args.lightcurve, names=True)
+data = np.genfromtxt(args.lightcurve, names=True)[::args.nthin]
 
 # Set up the likelihood function
 likelihood = GaussianLikelihood(data['MJD'], data['flux'], basic_model, data['fluxerr'])
 
-# Set up the prior and injection parameterss
+# Set up the priors and injection parameterss
 injection = DEFAULT_INJECTION_PARAMETERS
 injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero,
         q=args.massratio, radius_1=args.radius1, radius_2=args.radius2))
@@ -95,8 +95,7 @@ else:
     priors['period'] = Normal(args.period, args.period_err, "period", latex_label=r"$P_0$", unit="days")
     label += "_EM-prior"
 
-meta_data = dict(lightcurve=args.lightcurve)
 result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=args.nlive,
-        outdir=args.outdir, label=label, meta_data=meta_data, resume=True)
+        outdir=args.outdir, label=label, meta_data=dict(lightcurve=args.lightcurve), resume=True)
 injection = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=injection, priors=True)

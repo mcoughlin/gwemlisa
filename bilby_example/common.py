@@ -35,7 +35,7 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
             estimated (note: this requires a prior to be given for sigma). If
             not None, this defines the standard-deviation of the data points.
             This can either be a single float, or an array with length equal
-            to that for x and y.
+            to that for 'x' and 'y'.
         """
 
         super(GaussianLikelihood, self).__init__(x=x, y=y, func=func)
@@ -47,9 +47,6 @@ class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
 
     def log_likelihood(self):
         return np.nan_to_num(np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2) / 2))
-
-    def __repr__(self):
-        return self.__class__.__name__+f"(x={self.x}, y={self.y}, func={self.func.__name__}, sigma={self.sigma})"
 
     @property
     def sigma(self):
@@ -143,40 +140,7 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
     except Exception as e:
         return t_obs * 10**99
     return flux
-    '''
-    grid = "very_sparse"
-    exact_grav = False
-    verbose = 0
-    shape_1="sphere"
-    shape_2="roche"
-    try:
-        m = ellc.lc(
-            t_obs=t_obs,
-            radius_1=radius_1,
-            radius_2=radius_2,
-            sbratio=sbratio,
-            incl=incl,
-            t_zero=t_zero,
-            q=q,
-            period=period,
-            shape_1=shape_1,
-            shape_2=shape_2,
-            ldc_1=ldc_1,
-            ldc_2=ldc_2,
-            gdc_2=gdc_2,
-            f_c=f_c,
-            f_s=f_s,
-            t_exp=t_exp,
-            grid_1=grid,
-            grid_2=grid,
-            heat_2=heat_2,
-            exact_grav=exact_grav,
-            verbose=verbose)
-        m *= scale_factor
-    except Exception as e:
-        return t_obs * 10**99
-    return m
-    '''
+
 
 def basic_model_pdot(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
                      heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp, pdot):

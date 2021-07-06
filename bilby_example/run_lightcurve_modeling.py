@@ -8,10 +8,12 @@ import numpy as np
 import pymultinest
 import matplotlib.pyplot as plt
 import corner
+import bilby
+from bilby.core.prior import Uniform
 
 from scipy.stats import gaussian_kde, norm
-from common import basic_model_pdot, pdot_phasefold, BinaryGW, \
-                   DEFAULT_INJECTION_PARAMETERS, Observation
+from common import basic_model_pdot, pdot_phasefold, GaussianLikelihood, \
+                   BinaryGW, Observation, DEFAULT_INJECTION_PARAMETERS
 
 home = os.path.expanduser("~")
 warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
@@ -20,13 +22,6 @@ warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 G = 6.67e-11       # gravitational constant (m^3/kg/s^2)
 c = 299792458      # speed of light (m/s)
 MSUN = 1.989e30    # solar mass (kg)
-
-def greedy_kde_areas_1d(pts):
-    return gaussian_kde(np.random.permutation(pts)[:int(pts.shape[0] / 2)].T)
-
-def fdotgw(f0, mchirp):
-    return 96/5 * np.pi * (G*np.pi*mchirp/c**3)**(5/3) * f0**(11/3)
-
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
@@ -56,7 +51,7 @@ if args.test:
     0.002820266, 2.10334e-17, 1.40157, 4.66848, 2.07938e-23, 1.86512, 1.33296, 0.634247
     np.random.seed(0)
 else:
-    # Read-in true parameter values from chain directory files
+    # Read-in true GW parameter values from chain directory files
     binary = os.path.join(args.chainsdir, os.listdir(args.chainsdir)[args.binary-1])
     binaryname = os.path.basename(os.path.normpath(binary))
     f, fdot, col, lon, amp, incl, pol, phase = np.loadtxt(os.path.join(binary, f"{binaryname}.dat"))
@@ -79,10 +74,10 @@ if not os.path.isdir(binaryDir):
     os.makedirs(binaryDir)
 
 # Write binary parameters to json file for later reference
-pars = {r'$f$': b.f0, r'$\dot{f}$': b.fdot, r'$P_0$': b.p0, r'$\dot{P}$': b.pdot, r'$\iota$': b.incl,
-        r'$q$': b.q, r'$M_c$': b.mchirp, r'$M_1$': b.m1, r'$M_2$': b.m2, r'$R_1$': b.r1, r'$R_2$': b.r2,
-        r'$a$': b.a, r'$K_1$': b.k1, r'$K_2$': b.k2, r'$b$': b.b}
-with open(os.path.join(binaryDir, "parameters.json"),'w+') as parameters:
+pars = {'$f_0$': b.f0, r'$\dot{f}$': b.fdot, '$P_0$': b.p0, '$\dot{P}$': b.pdot, 'q': b.q,
+        r'$\mathcal{M}$': b.mchirp, '$M_1$': b.m1, '$M_2$': b.m2, r'$\iota$': b.incl,
+        '$R_1$': b.r1, '$R_2$': b.r2, 'a': b.a, '$K_1$': b.k1, '$K_2$': b.k2, 'b': b.b}
+with open(os.path.join(binaryDir, f"parameters_{binaryname}.json"),'w+') as parameters:
     json.dump(pars, parameters, indent=2)
 
 
@@ -121,9 +116,8 @@ if args.periodfind:
     from periodfind.aov import AOV
     phase_bins = 20
     aov = AOV(phase_bins)
-    dataslice = aov.calc(time_stack, mag_stack, periods,
-            pdots_to_test, output='periodogram').data[:, 1]
-
+    data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test, output='periodogram')
+    dataslice = data_out[0].data[:, 1]
     low_side, high_side = 0, 0
     jj = np.argmin(np.abs(b.p0 - periods))
     aov_peak = dataslice[jj]
@@ -196,18 +190,18 @@ for ii, row in enumerate(data):
         inc.append(np.array(post_out["incl"]))
 
 
+# Create "inc" directory for storing plots and data
+plotDir = os.path.join(binaryDir, "inc")
+if not os.path.isdir(plotDir):
+    os.makedirs(plotDir)
+
 # Prior and likelihood functions for inclination recovery
 def myprior(cube, ndim, nparams):
     cube[0] = cube[0] * 90
 
 def myloglike(cube, ndim, nparams):
-    kdes = [greedy_kde_areas_1d(i) for i in inc]
+    kdes = [gaussian_kde(np.random.permutation(pts)[:int(pts.shape[0]/2)].T) for pts in inc]
     return np.nan_to_num(np.sum([np.log(kde(cube[0])[0]) for kde in kdes]), nan=-np.inf)
-
-# Create "inc" directory for storing plots and data
-plotDir = os.path.join(binaryDir, "inc")
-if not os.path.isdir(plotDir):
-    os.makedirs(plotDir)
 
 # Estimate the inclination based on the observations
 n_params = len(["inclination"])
@@ -247,6 +241,10 @@ plt.savefig(os.path.join(plotDir, "residual.png"), bbox_inches='tight')
 plt.close()
 
 
+# Function to compute fdot from frequency and chirp mass
+def fdotgw(f0, mchirp):
+    return 96/5 * np.pi * (G*np.pi*mchirp/c**3)**(5/3) * f0**(11/3)
+
 # Prior and likelihood functions for chirp mass recovery
 def myprior(cube, ndim, nparams):
     cube[0] = cube[0] * 1.25
@@ -267,7 +265,7 @@ fdot_log10 = np.array([np.log10(x) for x in fdot])
 multidata = np.vstack((multidata[:, 0], fdot_log10)).T
 
 # Produce corner plot of chirp mass against log_fdot
-figure = corner.corner(multidata, labels=[r"$M_c [M_{\odot}]$", r"$\log_{10} \dot{f}$"],
+figure = corner.corner(multidata, labels=[r"$\mathcal{M} [M_{\odot}]$", r"$\log_{10} \dot{f}$"],
         show_titles=True, truths=[b.mchirp, np.log10(b.fdot)], quantiles=[0.16, 0.5, 0.84],
         title_fmt='.3f', smooth=0.9, title_kwargs=dict(fontsize=26), label_kwargs=dict(fontsize=30))
 figure.set_size_inches(12, 12)
