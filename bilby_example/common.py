@@ -3,7 +3,7 @@ import bilby
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
-# constants (SI units)
+# Constants (SI units)
 G = 6.67e-11       # gravitational constant (m^3/kg/s^2)
 c = 299792458      # speed of light (m/s)
 RSUN = 6.957e8     # solar radius (m)
@@ -11,63 +11,8 @@ MSUN = 1.989e30    # solar mass (kg)
 
 
 # Fixed injection parameters
-DEFAULT_INJECTION_PARAMETERS = dict(radius_1=0.125, radius_2=0.3, sbratio=1/15, q=0.4,
+DEFAULT_INJECTION_PARAMETERS = dict(radius_1=0.19, radius_2=0.219, sbratio=0.25, q=0.6,
         heat_2=5, ldc_1=0.2, ldc_2=0.4548, gdc_2=0.61, f_c=0, f_s=0, t_exp=3/(60*60*24))
-
-
-class GaussianLikelihood(bilby.core.likelihood.Analytical1DLikelihood):
-    def __init__(self, x, y, func, sigma=None):
-        """
-        A general Gaussian likelihood for known or unknown noise - the model
-        parameters are inferred from the arguments of function.
-
-        Parameters
-        ----------
-        x, y: array_like
-            The data to analyse
-        func:
-            The python function to fit to the data. Note, this must take the
-            dependent variable as its first argument. The other arguments
-            will require a prior and will be sampled over (unless a fixed
-            value is given).
-        sigma: None, float, array_like
-            If None, the standard deviation of the noise is unknown and will be
-            estimated (note: this requires a prior to be given for sigma). If
-            not None, this defines the standard-deviation of the data points.
-            This can either be a single float, or an array with length equal
-            to that for 'x' and 'y'.
-        """
-
-        super(GaussianLikelihood, self).__init__(x=x, y=y, func=func)
-        self.sigma = sigma
-
-        # Check if sigma was provided, if not it is a parameter
-        if self.sigma is None:
-            self.parameters['sigma'] = None
-
-    def log_likelihood(self):
-        return np.nan_to_num(np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2) / 2))
-
-    @property
-    def sigma(self):
-        """
-        This checks if sigma has been set in parameters. If so, that value
-        will be used. Otherwise, the attribute sigma is used. The logic is
-        that if sigma is not in parameters the attribute is used which was
-        given at init (i.e. the known sigma as either a float or array).
-        """
-        return self.parameters.get('sigma', self._sigma)
-
-    @sigma.setter
-    def sigma(self, sigma):
-        if sigma is None:
-            self._sigma = sigma
-        elif isinstance(sigma, float) or isinstance(sigma, int):
-            self._sigma = sigma
-        elif len(sigma) == self.n:
-            self._sigma = sigma
-        else:
-            raise ValueError("Sigma must be either float or array-like x.")
 
 
 def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
@@ -76,7 +21,7 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
     Function which returns flux values at times t_obs.
 
     Parameters
-    ----------
+    ==========
         t_obs : array_like
             array of observation times [days]
 
@@ -126,7 +71,7 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
             constant factor to multiply flux by
 
     Returns
-    -------
+    =======
         flux: float array
             array of flux values at times t_obs
     """
@@ -136,23 +81,21 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
                        t_zero=t_zero, period=period, q=q, ldc_1=ldc_1, ldc_2=ldc_2, gdc_2=gdc_2,
                        f_c=f_c, f_s=f_s, t_exp=t_exp, heat_2=heat_2, exact_grav=False, verbose=0,
                        grid_1='very_sparse', grid_2='very_sparse', shape_1='sphere', shape_2='roche')
-        flux *= scale_factor
     except Exception as e:
         return t_obs * 10**99
-    return flux
+    return flux * scale_factor
 
 
 def basic_model_pdot(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
                      heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp, pdot):
+    """ Wrapper for basic_model which uses pdot to compute 'phasefolded' observation times """
     phases = pdot_phasefold(t_obs, period, pdot*(60*60*24)**2)
     fluxes = []
     for ii in range(len(t_obs)):
         new_period = period - pdot*t_obs[ii]*(60*60*24)**2
         flux = basic_model(phases*new_period, radius_1, radius_2, sbratio, incl, t_zero, q, new_period,
                            heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp)
-        tmod = np.mod(t_obs[ii], new_period)
-        phot = np.interp(tmod, t_obs, flux, period=new_period)
-        fluxes.append(phot)
+        fluxes.append(np.interp(np.mod(t_obs[ii], new_period), t_obs, flux, period=new_period))
     return fluxes
 
 
@@ -160,13 +103,11 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
     """
     @author: kburdge
 
-    Function which returns phases corresponding to timestamps in a lightcurve 
-    given a period p0, period derivative pdot, and reference epoch t_zero.
-
-    If no reference epoch is supplied, reference epoch is set to earliest time in lightcurve.
+    Function which returns phases corresponding to timestamps in a lightcurve
+    given a period p0, period derivative pdot, and reference epoch t_zero
 
     Parameters
-    ----------
+    ==========
         times : array_like
             array of observation times [days]
 
@@ -180,7 +121,7 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
             starting time of observation [days]
 
     Returns
-    -------
+    =======
         phases : float array
             phases computed for given t_obs, p0, and pdot
     """
@@ -189,23 +130,119 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
         t_obs = t_obs - np.min(t_obs)
     else:
         t_obs = t_obs - t_zero
-    phases = np.mod(t_obs - 1/2*(pdot/p0)*t_obs**2, p0) / p0
-    return phases
+    return np.mod(t_obs - 1/2*(pdot/p0)*t_obs**2, p0) / p0
+
+
+def periodfind(binary, observation):
+    """
+    Function which computes period based on a simulated set of observations
+
+    Parameters
+    ==========
+        binary : BinaryGW
+            binary object being observed
+
+        observation : Observation
+            binary observation object
+
+    Returns
+    =======
+        period : float
+            orbital period recovered from observations [days]
+
+        period_err : float
+            error in orbital period recovered from observations [days]
+    """
+
+    # Set up the full set of injection_parameters
+    injection_parameters = DEFAULT_INJECTION_PARAMETERS
+    injection_parameters["incl"] = 90
+    injection_parameters["period"] = binary.p0
+    injection_parameters["t_zero"] = observation.obstimes[0]
+    injection_parameters["scale_factor"] = 1
+    injection_parameters["q"] = binary.q
+    injection_parameters["radius_1"] = binary.r1
+    injection_parameters["radius_2"] = binary.r2
+    injection_parameters["pdot"] = binary.pdot
+
+    # Generate list of observation times
+    t_obs = Observation(binary, t_zero=observation.obstimes[0],
+            numobs=1000, mean_dt=3, std_dt=0.5).obstimes
+
+    # Evaluate the injection data
+    lc = basic_model_pdot(t_obs, **injection_parameters)
+    baseline = np.max(t_obs) - np.min(t_obs)
+    samples_per_peak = 10
+    df = 1 / (samples_per_peak * baseline)
+    fmin, fmax = 1/binary.p0 - 100*df, 1/binary.p0 + 100*df
+    freqs = fmin + df * np.arange(int(np.ceil((fmax - fmin) / df)))
+    periods = np.sort((1/freqs).astype(np.float32))
+    pdots_to_test = np.array([0, binary.pdot]).astype(np.float32)
+
+    # Normalize lightcurve and construct time and magnitude arrays
+    lc = (lc - np.min(lc)) / (np.max(lc)-np.min(lc))
+    time_stack = [t_obs.astype(np.float32)]
+    mag_stack = [lc.astype(np.float32)]
+
+    from periodfind.aov import AOV
+    phase_bins = 20
+    aov = AOV(phase_bins)
+    data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test, output='periodogram')
+    dataslice = data_out[0].data[:, 1]
+
+    low_side, high_side = 0, 0
+    jj = np.argmin(np.abs(binary.p0 - periods))
+    aov_peak = dataslice[jj]
+    ii = jj + 0
+    while high_side == 0:
+        if dataslice[ii] < aov_peak / 2:
+            high_side = periods[ii]
+            break
+        ii += 1
+    ii = jj + 0
+    while low_side == 0:
+        if dataslice[ii] < aov_peak / 2:
+            low_side = periods[ii]
+            break
+        ii -= 1
+
+    period = periods[jj]
+    period_err = np.mean([periods[jj]-low_side, high_side-periods[jj]]) / periods[jj]
+    return period, period_err
+
+
+class GaussianLikelihood(bilby.core.likelihood.GaussianLikelihood):
+    def __init__(self, x, y, func, sigma=None):
+        """
+        A general Gaussian likelihood for known or unkown noise - the model
+        parameters are inferred from the arguments of the function
+
+        Parameters
+        ==========
+        x, y : array_like
+            data to analyse
+
+        func :
+            function to fit to the data
+
+        sigma : None, float, array_like
+            standard deviation of the data
+        """
+ 
+        super(GaussianLikelihood, self).__init__(x=x, y=y, func=func, sigma=sigma)
+
+    # Redefine log_likelihood to map nan values to 0.0
+    def log_likelihood(self):
+        return np.nan_to_num(np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2) / 2))
 
 
 class BinaryGW:
-
-    def __init__(self,
-        f0,
-        fdot,
-        incl,
-        q
-    ):
+    def __init__(self, f0, fdot, incl, q):
         """
-        A class for representing binaries with GW parameters in mind.
+        A class for representing binaries with GW parameters in mind
 
         Parameters
-        ----------
+        ==========
         f0 : float
             starting frequency [hertz]
 
@@ -219,7 +256,7 @@ class BinaryGW:
             mass ratio (m2/m1)
 
         Properties
-        ----------
+        ==========
         p0 : float
             starting orbital period [days]
 
@@ -252,7 +289,7 @@ class BinaryGW:
 
         K2 : float
             line-of-sight radial velocity amplitude of body 2 [km/s]
-        
+
         b : float
             impact parameter (between 0-1 for eclipsing systems)
         """
@@ -312,24 +349,18 @@ class BinaryGW:
     @property
     def k2(self):
         return 2*np.pi*self.f0*(self.a*RSUN)*np.sin(np.radians(self.incl))/(1 + self.q) / 1000
-    
+
     @property
     def b(self):
         return np.cos(np.radians(self.incl)) / (self.r1 + self.r2)
 
 class Observation:
-    def __init__(self,
-        binary,
-        t_zero = 0,
-        numobs = 25,
-        mean_dt = 120,
-        std_dt = 5
-    ):
+    def __init__(self, binary, t_zero=0, numobs=25, mean_dt=120, std_dt=5):
         """
-        A class for representing EM binary observations of a binary object.
+        A class for representing EM binary observations of a binary object
 
         Parameters
-        ----------
+        ==========
         binary: BinaryGW
             binary object being observed
 
@@ -346,7 +377,7 @@ class Observation:
             standard deviation of the observation times [days]
 
         Properties
-        ----------
+        ==========
         obstimes: float array
             array with observation times [days]
 

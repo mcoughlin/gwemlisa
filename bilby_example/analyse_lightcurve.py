@@ -1,11 +1,9 @@
 import os
+import bilby
 import argparse
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
-
-import bilby
 from bilby.core.prior import Uniform, Normal
 from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
 
@@ -43,22 +41,25 @@ class Uniform_Cosine_Prior(bilby.core.prior.Prior):
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
-parser.add_argument("-o", "--outdir", help="path to the ouput directory")
-parser.add_argument("-l", "--lightcurve", type=str, help="path to lightcurve file")
+parser.add_argument("--outdir", help="path to the ouput directory")
+parser.add_argument("--lightcurve", type=str, help="path to lightcurve file")
 parser.add_argument("--nthin", default=10, type=int, help="read in every nth line from lightcurve file")
 parser.add_argument("--gw-chain", help="chain file for computing GW priors")
-parser.add_argument("-i", "--incl", default=90, type=float, help="inclination [degrees])")
+parser.add_argument("--incl", default=90, type=float, help="inclination [degrees])")
 parser.add_argument("--period", default=0.004, type=float, help="period [days]")
 parser.add_argument("--period-err", default=1e-5, type=float, help="period uncertainty [days]")
 parser.add_argument("--t-zero", default=563041, type=float, help="t-zero [days]")
-parser.add_argument("-q", "--massratio", default=0.4, type=float, help="mass ratio (m2/m1)")
-parser.add_argument("-r", "--radius1", default=0.125, type=float, help="radius 1 (scaled by semi-major axis)")
-parser.add_argument("-s", "--radius2", default=0.3, type=float, help="radius 2 (scaled by semi-major axis)")
+parser.add_argument("--massratio", default=0.4, type=float, help="mass ratio (m2/m1)")
+parser.add_argument("--radius1", default=0.125, type=float, help="radius 1 (scaled by semi-major axis)")
+parser.add_argument("--radius2", default=0.3, type=float, help="radius 2 (scaled by semi-major axis)")
 parser.add_argument("--nlive", default=250, type=int, help="number of live points used for sampling")
 args = parser.parse_args()
 
+
 # The output directory is based on the input lightcurve
 label = os.path.splitext(os.path.basename(args.lightcurve))[0]
+
+# Check that the output directory exists
 if not os.path.isdir(args.outdir):
     os.makedirs(args.outdir)
 

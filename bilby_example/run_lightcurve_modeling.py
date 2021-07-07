@@ -1,22 +1,19 @@
 import os
 import json
+import bilby
+import corner
 import argparse
 import warnings
 import subprocess
-
-import numpy as np
 import pymultinest
+import numpy as np
 import matplotlib.pyplot as plt
-import corner
-import bilby
 from bilby.core.prior import Uniform
-
 from scipy.stats import gaussian_kde, norm
-from common import basic_model_pdot, pdot_phasefold, GaussianLikelihood, \
-                   BinaryGW, Observation, DEFAULT_INJECTION_PARAMETERS
-
-home = os.path.expanduser("~")
+from common import BinaryGW, Observation, periodfind
+from common import GaussianLikelihood, DEFAULT_INJECTION_PARAMETERS
 warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+home = os.path.expanduser("~")
 
 # Constants (SI units)
 G = 6.67e-11       # gravitational constant (m^3/kg/s^2)
@@ -40,7 +37,7 @@ parser.add_argument("--gwprior", action="store_true", help="Use GW prior, otherw
 parser.add_argument("--periodfind", action="store_true", help="Enable periodfind algorithm")       
 parser.add_argument("--nlive", default=250, type=int,
         help="Number of live points used for lightcurve sampling")
-parser.add_argument("--test", action="store_true", help="Enable temporary test parameters")
+parser.add_argument("--test", action="store_true", help="Enable test parameters")
 args = parser.parse_args()
 
 
@@ -80,64 +77,9 @@ pars = {'$f_0$': b.f0, r'$\dot{f}$': b.fdot, '$P_0$': b.p0, '$\dot{P}$': b.pdot,
 with open(os.path.join(binaryDir, f"parameters_{binaryname}.json"),'w+') as parameters:
     json.dump(pars, parameters, indent=2)
 
-
-# Periodfind Algorithm
+# Run periodfind algorithm if periodfind flag is specified
 if args.periodfind:
-    # Set up the full set of injection_parameters
-    injection_parameters = DEFAULT_INJECTION_PARAMETERS
-    injection_parameters["incl"] = 90
-    injection_parameters["period"] = b.p0
-    injection_parameters["t_zero"] = o.obstimes[0]
-    injection_parameters["scale_factor"] = 1
-    injection_parameters["q"] = b.q
-    injection_parameters["radius_1"] = b.r1
-    injection_parameters["radius_2"] = b.r2
-    injection_parameters["pdot"] = b.pdot
-
-    # Generate list of observation times
-    t_obs = Observation(b, t_zero=o.obstimes[0], numobs=1000, mean_dt=3, std_dt=0.5).obstimes
-
-    # Evaluate the injection data
-    lc = basic_model_pdot(t_obs, **injection_parameters)
-
-    baseline = np.max(t_obs) - np.min(t_obs)
-    fmin, fmax = 2/baseline, 480
-    samples_per_peak = 10
-    df = 1 / (samples_per_peak * baseline)
-    fmin, fmax = 1/b.p0 - 100*df, 1/b.p0 + 100*df
-    freqs = fmin + df*np.arange(int(np.ceil((fmax - fmin) / df)))
-    periods = np.sort((1/freqs).astype(np.float32))
-    pdots_to_test = np.array([0, b.pdot]).astype(np.float32)
-
-    lc = (lc - np.min(lc)) / (np.max(lc)-np.min(lc))
-    time_stack = [t_obs.astype(np.float32)]
-    mag_stack = [lc.astype(np.float32)]
-
-    from periodfind.aov import AOV
-    phase_bins = 20
-    aov = AOV(phase_bins)
-    data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test, output='periodogram')
-    dataslice = data_out[0].data[:, 1]
-    low_side, high_side = 0, 0
-    jj = np.argmin(np.abs(b.p0 - periods))
-    aov_peak = dataslice[jj]
-    ii = jj + 0
-    while high_side == 0:
-        if dataslice[ii] < aov_peak / 2:
-            high_side = periods[ii]
-            break
-        ii += 1
-    ii = jj + 0
-    while low_side == 0:
-        if dataslice[ii] < aov_peak / 2:
-            low_side = periods[ii]
-            break
-        ii -= 1
-
-    period = periods[jj]
-    err = np.mean([periods[jj]-low_side, high_side-periods[jj]]) / periods[jj]
-    print(f'Estimated period: {period:.10f}')
-    print(f'Average error bar: {err:.10f}')
+    period, period_err = periodfind(b, o)
 
 
 t_0, inc = [], []
@@ -177,7 +119,7 @@ for ii, row in enumerate(data):
             f"--radius1 {b.r1} --radius2 {b.r2} --massratio {b.q}"
         )
         if args.periodfind:
-            cmd += f" --period-err {err}"
+            cmd += f" --period-err {period_err}"
         if args.gwprior:
             chainfile = os.path.join(binary, "chains", "dimension_chain.dat.1")
             cmd += f" --gw-chain {chainfile}"
