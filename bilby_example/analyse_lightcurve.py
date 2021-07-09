@@ -3,41 +3,9 @@ import bilby
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
 from bilby.core.prior import Uniform, Normal
-from common import basic_model, DEFAULT_INJECTION_PARAMETERS, GaussianLikelihood
-
-
-class KDE_Prior(bilby.core.prior.Prior):
-    def __init__(self, samples, name=None, latex_label=None, unit=None):
-        super(KDE_Prior, self).__init__(name=name, latex_label=latex_label, unit=unit)
-        self.samples = samples
-        self.kde = gaussian_kde(samples)
-        self.minimum = samples.min()
-        self.maximum = samples.max()
-    
-    def sample(self, size=1):
-        return self.kde.resample(size=size)
-    
-    def rescale(self, val):
-        return self.kde.resample(1)
-
-    def prob(self, val):
-        return self.kde.pdf(val)
-
-
-class Uniform_Cosine_Prior(bilby.core.prior.Prior):
-    def __init__(self, minimum=0, maximum=90, name=None, latex_label=None, unit=None):
-        super(Uniform_Cosine_Prior, self).__init__(minimum=minimum, maximum=maximum,
-                name=name, latex_label=latex_label, unit=unit)
-
-    def rescale(self, val):
-        norm = 1 / (np.cos(np.radians(self.minimum)) - np.cos(np.radians(self.maximum)))
-        return np.degrees(np.arccos(np.cos(np.radians(self.minimum)) - val / norm))
-
-    def prob(self, val):
-        return (np.pi/180) * np.sin(np.radians(val)) * self.is_in_prior_range(val)
-
+from common import DEFAULT_INJECTION_PARAMETERS, basic_model
+from common import GaussianLikelihood, KDE_Prior, Uniform_Cosine_Prior
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
@@ -54,7 +22,6 @@ parser.add_argument("--radius1", default=0.125, type=float, help="radius 1 (scal
 parser.add_argument("--radius2", default=0.3, type=float, help="radius 2 (scaled by semi-major axis)")
 parser.add_argument("--nlive", default=250, type=int, help="number of live points used for sampling")
 args = parser.parse_args()
-
 
 # The output directory is based on the input lightcurve
 label = os.path.splitext(os.path.basename(args.lightcurve))[0]
@@ -80,7 +47,7 @@ priors['q'] = Uniform(0.5, 1, "q")
 priors['radius_1'] = Uniform(0, 1, "radius_1")
 priors['radius_2'] = Uniform(0, 1, "radius_2")
 priors['t_zero'] = Uniform(args.t_zero-args.period/2, args.t_zero+args.period/2, 
-        "t_zero", latex_label=r"$t_0$", unit="days")
+        "t_zero", latex_label="$t_0$", unit="days")
 
 if args.gw_chain:
     # Set up GW priors for inclination and period
@@ -88,15 +55,15 @@ if args.gw_chain:
     period_prior_vals = 2/data_out[:, 0] / (60*60*24)
     incl_prior_vals = 90 - np.abs(np.degrees(np.arccos(data_out[:, 5])) - 90)
     priors['incl'] = KDE_Prior(incl_prior_vals, "incl", latex_label=r"$\iota$", unit="deg")
-    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label=r"$P_0$", unit="days")
+    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="$P_0$", unit="days")
     label += f"_GW-prior"
 else:
     # Set up EM priors for inclination and period
     priors['incl'] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$", unit="deg")
-    priors['period'] = Normal(args.period, args.period_err, "period", latex_label=r"$P_0$", unit="days")
+    priors['period'] = Normal(args.period, args.period_err, "period", latex_label="$P_0$", unit="days")
     label += "_EM-prior"
 
 result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest', nlive=args.nlive,
         outdir=args.outdir, label=label, meta_data=dict(lightcurve=args.lightcurve), resume=True)
-injection = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
-result.plot_corner(parameters=injection, priors=True)
+parameters = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
+result.plot_corner(parameters=parameters, priors=True)

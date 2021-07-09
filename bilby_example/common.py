@@ -1,6 +1,7 @@
 import ellc
 import bilby
 import numpy as np
+from scipy.stats import gaussian_kde
 from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
 # Constants (SI units)
@@ -75,7 +76,6 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
         flux: float array
             array of flux values at times t_obs
     """
-
     try:
         flux = ellc.lc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio, incl=incl,
                        t_zero=t_zero, period=period, q=q, ldc_1=ldc_1, ldc_2=ldc_2, gdc_2=gdc_2,
@@ -88,7 +88,7 @@ def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
 
 def basic_model_pdot(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
                      heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp, pdot):
-    """ Wrapper for basic_model which uses pdot to compute 'phasefolded' observation times """
+    """ Wrapper for basic_model which uses pdot to compute phase folded observation times """
     phases = pdot_phasefold(t_obs, period, pdot*(60*60*24)**2)
     fluxes = []
     for ii in range(len(t_obs)):
@@ -125,7 +125,6 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
         phases : float array
             phases computed for given t_obs, p0, and pdot
     """
-
     if t_zero == 0:
         t_obs = t_obs - np.min(t_obs)
     else:
@@ -148,12 +147,11 @@ def periodfind(binary, observation):
     Returns
     =======
         period : float
-            orbital period recovered from observations [days]
+            recovered orbital period [days]
 
         period_err : float
-            error in orbital period recovered from observations [days]
+            error in recovered orbital period [days]
     """
-
     # Set up the full set of injection_parameters
     injection_parameters = DEFAULT_INJECTION_PARAMETERS
     injection_parameters["incl"] = 90
@@ -193,13 +191,13 @@ def periodfind(binary, observation):
     low_side, high_side = 0, 0
     jj = np.argmin(np.abs(binary.p0 - periods))
     aov_peak = dataslice[jj]
-    ii = jj + 0
+    ii = jj
     while high_side == 0:
         if dataslice[ii] < aov_peak / 2:
             high_side = periods[ii]
             break
         ii += 1
-    ii = jj + 0
+    ii = jj
     while low_side == 0:
         if dataslice[ii] < aov_peak / 2:
             low_side = periods[ii]
@@ -228,12 +226,45 @@ class GaussianLikelihood(bilby.core.likelihood.GaussianLikelihood):
         sigma : None, float, array_like
             standard deviation of the data
         """
- 
         super(GaussianLikelihood, self).__init__(x=x, y=y, func=func, sigma=sigma)
 
     # Redefine log_likelihood to map nan values to 0.0
     def log_likelihood(self):
-        return np.nan_to_num(np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2) / 2))
+        log_l = np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2)/2)
+        return np.nan_to_num(log_l)
+
+
+class KDE_Prior(bilby.core.prior.Prior):
+    def __init__(self, samples, name=None, latex_label=None, unit=None):
+        """ A prior which draws from a Gaussian KDE constructed from the input data """
+        super(KDE_Prior, self).__init__(name=name, latex_label=latex_label, unit=unit)
+        self.samples = samples
+        self.kde = gaussian_kde(samples)
+        self.minimum = samples.min()
+        self.maximum = samples.max()
+
+    def sample(self, size=1):
+        return self.kde.resample(size=size)
+
+    def rescale(self, val):
+        return self.kde.resample(1)
+
+    def prob(self, val):
+        return self.kde.pdf(val)
+
+
+class Uniform_Cosine_Prior(bilby.core.prior.Prior):
+    def __init__(self, minimum=0, maximum=90, name=None, latex_label=None, unit=None):
+        """ A prior which draws uniformly in cosine in units of degrees """
+        super(Uniform_Cosine_Prior, self).__init__(minimum=minimum, maximum=maximum,
+                name=name, latex_label=latex_label, unit=unit)
+
+    def rescale(self, val):
+        _norm = 1 / (np.cos(np.radians(self.minimum)) - np.cos(np.radians(self.maximum)))
+        return np.degrees(np.arccos(np.cos(np.radians(self.minimum)) - val / _norm))
+
+    def prob(self, val):
+        return (np.pi/180) * np.sin(np.radians(val)) * self.is_in_prior_range(val)
 
 
 class BinaryGW:
@@ -266,6 +297,9 @@ class BinaryGW:
         mchirp : float
             chirp mass [Solar Masses]
 
+        mtot : float
+            total mass [Solar Masses]
+
         tcoal : float
             time to coalescence [seconds]
 
@@ -293,30 +327,30 @@ class BinaryGW:
         b : float
             impact parameter (between 0-1 for eclipsing systems)
         """
-
         self.f0 = f0
         self.fdot = fdot
         self.incl = incl
         self.q = q
-        self.eta = self.q/(1+self.q)**2
-        self.root = np.sqrt(0.25-self.eta)
-        self.fraction = (0.5+self.root) / (0.5-self.root)
 
         # Generate white dwarf mass-radius relation spline curve
         wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
-        self._spl = IUS(wd_eof[:,0], wd_eof[:,1])
+        self._spl = IUS(wd_eof[:, 0], wd_eof[:, 1])
 
     @property
     def p0(self):
-        return 2/self.f0 / (60*60*24)
+        return 2 / self.f0 / (60*60*24)
 
     @property
     def pdot(self):
-        return 2 * self.fdot/self.f0**2
+        return 2 * self.fdot / self.f0**2
 
     @property
     def mchirp(self):
-        return c**3/G * (5/96 * np.pi**(-8/3) * self.f0**(-11/3) * self.fdot)**(3/5) / MSUN
+        return c**3/G*(5/96*np.pi**(-8/3) * self.f0**(-11/3) * self.fdot)**(3/5) / MSUN
+
+    @property
+    def mtot(self):
+        return self.mchirp * ((1 + self.q)**2 / self.q)**(3/5)
 
     @property
     def tcoal(self):
@@ -324,15 +358,15 @@ class BinaryGW:
 
     @property
     def m1(self):
-        return self.mchirp * (1 + 1/self.fraction)**(1/5) / (1/self.fraction)**(3/5)
+        return self.mtot**(1/6) * self.mchirp**(5/6) * self.q**(-1/2)
 
     @property
     def m2(self):
-        return self.mchirp * (1 + self.fraction)**(1/5) / (self.fraction)**(3/5)
+        return self.mtot**(1/6) * self.mchirp**(5/6) * self.q**(1/2)
 
     @property
     def a(self):
-        return (G*((self.m1+self.m2)*MSUN) / ((np.pi*self.f0)**2))**(1/3) / RSUN
+        return (G*self.mtot*MSUN / (np.pi*self.f0)**2)**(1/3) / RSUN
 
     @property
     def r1(self):
@@ -344,15 +378,16 @@ class BinaryGW:
 
     @property
     def k1(self):
-        return 2*np.pi*self.f0*(self.a*RSUN)*np.sin(np.radians(self.incl))/(1 + 1/self.q) / 1000
+        return np.pi*self.f0*self.a*RSUN*np.sin(np.radians(self.incl))/(1 + 1/self.q)/1000
 
     @property
     def k2(self):
-        return 2*np.pi*self.f0*(self.a*RSUN)*np.sin(np.radians(self.incl))/(1 + self.q) / 1000
+        return np.pi*self.f0*self.a*RSUN*np.sin(np.radians(self.incl))/(1 + self.q)/1000
 
     @property
     def b(self):
         return np.cos(np.radians(self.incl)) / (self.r1 + self.r2)
+
 
 class Observation:
     def __init__(self, binary, t_zero=0, numobs=25, mean_dt=120, std_dt=5):
@@ -387,7 +422,6 @@ class Observation:
         phases: float array
             times of eclipses [days]
         """
-
         self.binary = binary
         self.t_zero = t_zero
         self.numobs = numobs
