@@ -1,101 +1,106 @@
 import ellc
 import bilby
+import scipy
 import numpy as np
-from scipy.stats import gaussian_kde
-from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
 # Constants (SI units)
-G = 6.67e-11       # gravitational constant (m^3/kg/s^2)
+G = 6.67384e-11    # gravitational constant (m^3/kg/s^2)
 c = 299792458      # speed of light (m/s)
 RSUN = 6.957e8     # solar radius (m)
 MSUN = 1.989e30    # solar mass (kg)
 
 
-# Fixed injection parameters
-DEFAULT_INJECTION_PARAMETERS = dict(radius_1=0.19, radius_2=0.219, sbratio=0.25, q=0.6,
-        heat_2=5, ldc_1=0.2, ldc_2=0.4548, gdc_2=0.61, f_c=0, f_s=0, t_exp=3/(60*60*24))
+# Default injection values
+DEFAULT_INJECTION_PARAMETERS = dict(
+    ldc_1=0.2, ldc_2=0.4548, gdc_2=0.61, scale_factor=1, incl=90,
+    f_c=0, f_s=0, sbratio=0.25, heat_2=5, t_exp=3/(60*60*24)
+)
 
 
-def basic_model(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
-                heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp):
+def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
+                ldc_2, gdc_2, f_c, f_s, sbratio, heat_2, t_exp, scale_factor):
     """
-    Function which returns flux values at times t_obs.
+    Function which returns flux values at times t_obs
 
     Parameters
     ==========
-        t_obs : array_like
-            array of observation times [days]
+    t_obs : array_like
+        array of observation times [days]
 
-        radius_1 : float
-            radius of body 1 scaled by semi-major axis
+    t_zero : float
+        starting time of observations [days]
 
-        radius_2 : float
-            radius of body 2 scaled by semi-major axis
+    period : float
+        starting orbital period [days]
 
-        sbratio : float
-            surface brightness ratio (S2/S1)
+    q : float
+        mass ratio (m2/m1)
 
-        incl : float
-            inclination with respect to observer [degrees]
+    incl : float
+        inclination with respect to observer [deg]
 
-        t_zero : float
-            starting time of observations [days]
+    radius_1 : float
+        radius of body 1 scaled by semi-major axis
 
-        period : float
-            starting orbital period [days]
+    radius_2 : float
+        radius of body 2 scaled by semi-major axis
 
-        q : float
-            mass ratio (m2/m1)
+    ldc_1 : float
+        limb darkening coefficient for body 1
 
-        f_c : float
-            sqrt(e)*cos(w) where e is eccentricity and w is longitude of periastron
+    ldc_2 : float
+        limb darkening coefficient for body 2
 
-        f_s : float
-            sqrt(e)*sin(w) where e is eccentricity and w is longitude of periastron
+    gdc_2 : float
+        gravity darkening exponent for body 2
 
-        ldc_1 : float
-            limb darkening coefficient for object 1
+    f_c : float
+        sqrt(e)*cos(w) where e is eccentricity and w is longitude of periastron
 
-        ldc_2 : float
-            limb darkening coefficient for object 2
+    f_s : float
+        sqrt(e)*sin(w) where e is eccentricity and w is longitude of periastron
 
-        gdc_2 : float
-            gravity darkening exponent for object 1
+    sbratio : float
+        surface brightness ratio (S2/S1)
 
-        heat_2 : float
-            coefficient for simplified reflection model
+    heat_2 : float
+        coefficient for simplified reflection model
 
-        t_exp : float
-            exposure time [days]
+    t_exp : float
+        exposure time [days]
 
-        scale_factor : float
-            constant factor to multiply flux by
+    scale_factor : float
+        constant factor to multiply flux by
 
     Returns
     =======
-        flux: float array
-            array of flux values at times t_obs
+    flux : float array
+        array of flux values at times t_obs
     """
     try:
-        flux = ellc.lc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio, incl=incl,
-                       t_zero=t_zero, period=period, q=q, ldc_1=ldc_1, ldc_2=ldc_2, gdc_2=gdc_2,
-                       f_c=f_c, f_s=f_s, t_exp=t_exp, heat_2=heat_2, exact_grav=False, verbose=0,
-                       grid_1='very_sparse', grid_2='very_sparse', shape_1='sphere', shape_2='roche')
+        flux = ellc.lc(
+            t_obs=t_obs, t_zero=t_zero, period=period, q=q, incl=incl,
+            radius_1=radius_1, radius_2=radius_2, ldc_1=ldc_1, ldc_2=ldc_2,
+            gdc_2=gdc_2, f_c=f_c, f_s=f_s, sbratio=sbratio, heat_2=heat_2,
+            t_exp=t_exp, verbose=0, shape_1='sphere', shape_2='roche',
+            grid_1='very_sparse', grid_2='very_sparse', exact_grav=False
+        )
     except Exception as e:
         return t_obs * 10**99
     return flux * scale_factor
 
 
-def basic_model_pdot(t_obs, radius_1, radius_2, sbratio, incl, t_zero, q, period,
-                     heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp, pdot):
-    """ Wrapper for basic_model which uses pdot to compute phase folded observation times """
+def basic_model_pdot(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2,
+                     gdc_2, f_c, f_s, sbratio, heat_2, t_exp, scale_factor, pdot):
+    """ Wrapper for basic_model which uses pdot to compute flux at phase folded times """
     phases = pdot_phasefold(t_obs, period, pdot*(60*60*24)**2)
     fluxes = []
     for ii in range(len(t_obs)):
-        new_period = period - pdot*t_obs[ii]*(60*60*24)**2
-        flux = basic_model(phases*new_period, radius_1, radius_2, sbratio, incl, t_zero, q, new_period,
-                           heat_2, scale_factor, ldc_1, ldc_2, gdc_2, f_c, f_s, t_exp)
-        fluxes.append(np.interp(np.mod(t_obs[ii], new_period), t_obs, flux, period=new_period))
+        new_p0 = period - pdot*t_obs[ii]*(60*60*24)**2
+        flux = basic_model(phases*new_p0, t_zero, new_p0, q, incl, radius_1,
+                           radius_2, ldc_1, ldc_2, gdc_2, f_c, f_s, sbratio, 
+                           heat_2, t_exp, scale_factor)
+        fluxes.append(np.interp(np.mod(t_obs[ii], new_p0, flux, period=new_p0)))
     return fluxes
 
 
@@ -108,22 +113,22 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
 
     Parameters
     ==========
-        times : array_like
-            array of observation times [days]
+    times : array_like
+        array of observation times [days]
 
-        p0 : float
-            starting orbital period [days]
+    p0 : float
+        starting orbital period [days]
 
-        pdot : float
-            starting rate of change of period
+    pdot : float
+        rate of change of period
 
-        t_zero : float
-            starting time of observation [days]
+    t_zero : float
+        starting time of observation [days]
 
     Returns
     =======
-        phases : float array
-            phases computed for given t_obs, p0, and pdot
+    phases : float array
+        phases computed for given t_obs, p0, and pdot
     """
     if t_zero == 0:
         t_obs = t_obs - np.min(t_obs)
@@ -134,30 +139,28 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
 
 def periodfind(binary, observation):
     """
-    Function which computes period based on a simulated set of observations
+    Function which recovers the period for a given set of observations
 
     Parameters
     ==========
-        binary : BinaryGW
-            binary object being observed
+    binary : Binary
+        binary object being observed
 
-        observation : Observation
-            binary observation object
+    observation : Observation
+        binary observation object
 
     Returns
     =======
-        period : float
-            recovered orbital period [days]
+    period : float
+        recovered orbital period [days]
 
-        period_err : float
-            error in recovered orbital period [days]
+    period_err : float
+        error in recovered orbital period [days]
     """
     # Set up the full set of injection_parameters
     injection_parameters = DEFAULT_INJECTION_PARAMETERS
-    injection_parameters["incl"] = 90
     injection_parameters["period"] = binary.p0
     injection_parameters["t_zero"] = observation.obstimes[0]
-    injection_parameters["scale_factor"] = 1
     injection_parameters["q"] = binary.q
     injection_parameters["radius_1"] = binary.r1
     injection_parameters["radius_2"] = binary.r2
@@ -186,7 +189,8 @@ def periodfind(binary, observation):
     phase_bins = 20
     aov = AOV(phase_bins)
     data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test, output='periodogram')
-    dataslice = data_out[0].data[:, 1]
+    slice = (o.phases-o.obstimes)*(60*60*24)
+    dataslice = data_out[0].slice
 
     low_side, high_side = 0, 0
     jj = np.argmin(np.abs(binary.p0 - periods))
@@ -209,29 +213,151 @@ def periodfind(binary, observation):
     return period, period_err
 
 
-class GaussianLikelihood(bilby.core.likelihood.GaussianLikelihood):
-    def __init__(self, x, y, func, sigma=None):
-        """
-        A general Gaussian likelihood for known or unkown noise - the model
-        parameters are inferred from the arguments of the function
+def fdotgw(mchirp, f0):
+    """
+    Function which computes fdot from chirp mass and frequency
 
-        Parameters
-        ==========
-        x, y : array_like
-            data to analyse
+    Parameters
+    ==========
+    mchirp : array_like
+        chirp mass [Solar Masses]
 
-        func :
-            function to fit to the data
+    f0 : float
+        starting GW frequency [Hz]
 
-        sigma : None, float, array_like
-            standard deviation of the data
-        """
-        super(GaussianLikelihood, self).__init__(x=x, y=y, func=func, sigma=sigma)
+    Returns
+    =======
+    fdot : float array
+        rate of change of GW frequency [Hz/s]
+    """
+    return 96/5 * np.pi**(8/3) * (G * mchirp*MSUN / c**3)**(5/3) * f0**(11/3)
 
-    # Redefine log_likelihood to map nan values to 0.0
-    def log_likelihood(self):
-        log_l = np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2)/2)
-        return np.nan_to_num(log_l)
+
+def sma(p0, mchirp, q):
+    """
+    Function which computes semi-major axis from period, chirp mass, and mass ratio
+
+    Parameters
+    ==========
+    p0 : float
+        starting period [days]
+
+    mchirp : array_like
+        chirp mass [Solar Masses]
+
+    q : array_like
+        mass ratio (m2/m1)
+
+    Returns
+    =======
+    a : float array
+        semi-major axis (mean separation) [km]
+    """
+    return (G*mchirp*MSUN*((1+q)**2/q)**(3/5)*(p0*(60*60*24)/(2*np.pi))**2)**(1/3)/1000
+
+
+def parameter_dict(binary):
+    """ 
+    Function which organizes binary parameters into a dictionary structure
+
+    Parameters
+    ==========
+    binary : Binary
+        binary object to get parameters from
+
+    Returns
+    =======
+    parameter_dict : dict
+        dictionary with parameters values, descriptions, and units
+    """
+    parameter_dict = {
+        '$f_0$': {
+            'value': binary.f0,
+            'description': 'initial GW frequency',
+            'unit': 'Hz'
+        },
+        r'$\dot{f}$': {
+            'value': binary.fdot,
+            'description': 'time derivative of GW frequency',
+            'unit': 'Hz/s'
+        },
+        '$P_0$': {
+            'value': binary.p0*(60*24),
+            'description': 'initial orbital period',
+            'unit': 'min'
+        },
+        '$\dot{P}$': {
+            'value': binary.pdot,
+            'description': 'time derivative of orbital period',
+            'unit': None
+        },
+        r'$\iota$': {
+            'value': binary.incl,
+            'description': 'inclination',
+            'unit': 'degree'
+        },
+        'q': {
+            'value': binary.q,
+            'description': 'mass ratio (m2/m1)',
+            'unit': None
+        },
+        r'$\mathcal{M}$': {
+            'value': binary.mchirp,
+            'description': 'chirp mass',
+            'unit': 'Solar Masses'
+        },
+        'M': {
+            'value': binary.mtot,
+            'description': 'total mass',
+            'unit': 'Solar Masses'
+        },
+        '$m_1$': {
+            'value': binary.m1,
+            'description': 'mass of body 1 (primary)',
+            'unit': 'Solar Masses'
+        },
+        '$m_2$': {
+            'value': binary.m2,
+            'description': 'mass of body 2 (secondary)',
+            'unit': 'Solar Masses'
+        },
+        'a': {
+            'value': binary.a,
+            'description': 'semi-major axis',
+            'unit': 'Solar Radii'
+        },
+        '$R_1$': {
+            'value': binary.r1*binary.a,
+            'description': 'radius of body 1',
+            'unit': 'Solar Radii'
+        },
+        '$R_2$': {
+            'value': binary.r2*binary.a,
+            'description': 'radius of body 2',
+            'unit': 'Solar Radii'
+        },
+        '$K_1$': {
+            'value': binary.k1,
+            'description': 'line-of-sight radial velocity of body 1',
+            'unit': 'km/s'
+        },
+        '$K_2$': {
+            'value': binary.k2,
+            'description': 'line-of-sight radial velocity of body 2',
+            'unit': 'km/s'
+        },
+        'b': {
+            'value': binary.b,
+            'description': 'impact parameter',
+            'unit': None
+        },
+        r'$\tau_c$': {
+            'value': binary.tcoal/(60*60*24*365.25),
+            'description': 'time to coalescence',
+            'unit': 'yr'
+        }
+    }
+    return parameter_dict
 
 
 class KDE_Prior(bilby.core.prior.Prior):
@@ -239,7 +365,7 @@ class KDE_Prior(bilby.core.prior.Prior):
         """ A prior which draws from a Gaussian KDE constructed from the input data """
         super(KDE_Prior, self).__init__(name=name, latex_label=latex_label, unit=unit)
         self.samples = samples
-        self.kde = gaussian_kde(samples)
+        self.kde = scipy.stats.gaussian_kde(samples)
         self.minimum = samples.min()
         self.maximum = samples.max()
 
@@ -267,21 +393,46 @@ class Uniform_Cosine_Prior(bilby.core.prior.Prior):
         return (np.pi/180) * np.sin(np.radians(val)) * self.is_in_prior_range(val)
 
 
-class BinaryGW:
+class GaussianLikelihood(bilby.core.likelihood.GaussianLikelihood):
+    def __init__(self, x, y, func, sigma=None):
+        """
+        A general Gaussian likelihood for known or unkown noise - the model
+        parameters are inferred from the arguments of the function
+
+        Parameters
+        ==========
+        x, y : array_like
+            data to analyse
+
+        func :
+            function to fit to the data
+
+        sigma : None, float, array_like
+            standard deviation of the data
+        """
+        super(GaussianLikelihood, self).__init__(x=x, y=y, func=func, sigma=sigma)
+
+    # Redefine log_likelihood to map nan values to 0.0
+    def log_likelihood(self):
+        log_l = np.sum(-(self.residual/self.sigma)**2 / 2 - np.log(2*np.pi*self.sigma**2)/2)
+        return np.nan_to_num(log_l)
+
+
+class Binary:
     def __init__(self, f0, fdot, incl, q):
         """
-        A class for representing binaries with GW parameters in mind
+        A class for representing binaries and the associated parameters
 
         Parameters
         ==========
         f0 : float
-            starting frequency [hertz]
+            starting GW frequency [Hz]
 
         fdot : float
-            starting rate of change of frequency [hertz/sec]
+            rate of change of GW frequency [Hz/s]
 
         incl : float
-            inclination with respect to observer [degrees]
+            inclination with respect to observer [deg]
 
         q : float
             mass ratio (m2/m1)
@@ -292,16 +443,13 @@ class BinaryGW:
             starting orbital period [days]
 
         pdot : float
-            starting rate of change of orbital period
+            rate of change of orbital period
 
         mchirp : float
             chirp mass [Solar Masses]
 
         mtot : float
             total mass [Solar Masses]
-
-        tcoal : float
-            time to coalescence [seconds]
 
         m1 : float
             mass of body 1 (primary) [Solar Masses]
@@ -326,6 +474,9 @@ class BinaryGW:
 
         b : float
             impact parameter (between 0-1 for eclipsing systems)
+
+        tcoal : float
+            time to coalescence [s]
         """
         self.f0 = f0
         self.fdot = fdot
@@ -333,8 +484,8 @@ class BinaryGW:
         self.q = q
 
         # Generate white dwarf mass-radius relation spline curve
-        wd_eof = np.loadtxt("wd_mass_radius.dat", delimiter=",")
-        self._spl = IUS(wd_eof[:, 0], wd_eof[:, 1])
+        wd_eof = np.loadtxt('wd_mass_radius.dat', delimiter=',')
+        self._spl = scipy.interpolate.UnivariateSpline(wd_eof[:, 0], wd_eof[:, 1], s=0)
 
     @property
     def p0(self):
@@ -351,10 +502,6 @@ class BinaryGW:
     @property
     def mtot(self):
         return self.mchirp * ((1 + self.q)**2 / self.q)**(3/5)
-
-    @property
-    def tcoal(self):
-        return 5/256 * (np.pi*self.f0)**(-8/3) * (G*self.mchirp/c**3)**(-5/3)
 
     @property
     def m1(self):
@@ -388,39 +535,43 @@ class BinaryGW:
     def b(self):
         return np.cos(np.radians(self.incl)) / (self.r1 + self.r2)
 
+    @property
+    def tcoal(self):
+        return 5/256 * (np.pi*self.f0)**(-8/3) * (G*self.mchirp*MSUN/c**3)**(-5/3)
+
 
 class Observation:
     def __init__(self, binary, t_zero=0, numobs=25, mean_dt=120, std_dt=5):
         """
-        A class for representing EM binary observations of a binary object
+        A class for representing EM observations of a binary object
 
         Parameters
         ==========
-        binary: BinaryGW
+        binary : Binary
             binary object being observed
 
-        t_zero: float
+        t_zero : float
             starting time of observations [days]
 
-        numobs: int
+        numobs : int
             number of observations
 
-        mean_dt: float
+        mean_dt : float
             average dt between each observation time [days]
 
-        std_dt: float
+        std_dt : float
             standard deviation of the observation times [days]
 
         Properties
         ==========
-        obstimes: float array
-            array with observation times [days]
+        obstimes : float array
+            observation times [days]
 
-        freqs: float array
-            frequencies at the times of observation [hertz]
-
-        phases: float array
+        phases : float array
             times of eclipses [days]
+
+        freqs : float array
+            frequencies at observation times [Hz]
         """
         self.binary = binary
         self.t_zero = t_zero
@@ -437,11 +588,11 @@ class Observation:
         return self._t
 
     @property
-    def freqs(self):
-        tau = self.binary.tcoal - self.obstimes * (60*60*24)
-        return 1/np.pi * (5/256/tau)**(3/8) * (G*self.binary.mchirp/c**3)**(-5/8)
+    def phases(self):
+        phtimes = self.obstimes - self.t_zero
+        return phtimes - 1/2*(self.binary.fdot/self.binary.f0)*(60*60*24)*phtimes**2
 
     @property
-    def phases(self):
-        phtimes = (self.obstimes - self.t_zero) * (60*60*24)
-        return (phtimes - 1/2*(self.binary.fdot/self.binary.f0)*phtimes**2) / (60*60*24)
+    def freqs(self):
+        tau = self.binary.tcoal - self.obstimes*(60*60*24)
+        return 1/np.pi * (256/5*tau)**(-3/8) * (G*self.binary.mchirp*MSUN/c**3)**(-5/8)
