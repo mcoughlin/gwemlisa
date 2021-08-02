@@ -25,14 +25,14 @@ args = parser.parse_args()
 
 # Set up run command
 cmd = (
-    f"python run_lightcurve_modeling.py --numobs {args.numobs} --nlive {args.nlive} "
-    f"--outdir {Path(args.outdir)} --mean-dt {args.mean_dt} --std-dt {args.std_dt} "
-    f"--binary $SLURM_ARRAY_TASK_ID --chainsdir {Path(args.chainsdir)}"
+    f'python run_lightcurve_modeling.py --numobs {args.numobs} --nlive {args.nlive} '
+    f'--outdir {Path(args.outdir)} --mean-dt {args.mean_dt} --std-dt {args.std_dt} '
+    f'--binary $SLURM_ARRAY_TASK_ID --chainsdir {Path(args.chainsdir)}'
 )
 if args.gwprior:
-    cmd += f" --gwprior"
+    cmd += f' --gwprior'
 if args.periodfind:
-    cmd += " --periodfind"
+    cmd += ' --periodfind'
 
 # Generate slurm job script
 with open(Path(args.jobdir).joinpath(f'{args.jobname}.txt'), 'w+') as job:

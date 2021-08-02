@@ -1,7 +1,10 @@
 import ellc
 import bilby
-import scipy
 import numpy as np
+from pathlib import Path
+from scipy.stats import gaussian_kde
+from scipy.optimize import fsolve
+from scipy.interpolate import UnivariateSpline
 
 # Constants (SI units)
 G = 6.67384e-11    # gravitational constant (m^3/kg/s^2)
@@ -256,6 +259,31 @@ def sma(p0, mchirp, q):
     return (G*mchirp*MSUN*((1+q)**2/q)**(3/5)*(p0*(60*60*24)/(2*np.pi))**2)**(1/3)/1000
 
 
+def q_minimum(mchirp):
+    """
+    Function used to compute the minimum mass ratio such that the
+    primary mass does not exceed the Chandrasekhar limit
+
+    Parameters
+    ==========
+    mchirp : float
+        chirp mass [Solar Masses]
+
+    Returns
+    =======
+    q_min : float
+        minimum mass ratio (m2/m1)
+    """
+    def mass_constraint(q, *data):
+        """ Function used by fsolve to constrain the mass ratio """
+        m1, mchirp = data
+        return ((1+q)**2 / q)**(3/5) - ((1+q) * q**2)**(1/5) - m1/mchirp
+
+    data = (1.4, mchirp)
+    q_min = fsolve(mass_constraint, 0.5, args=data)[0]
+    return q_min
+
+
 def parameter_dict(binary):
     """ 
     Function which organizes binary parameters into a dictionary structure
@@ -365,7 +393,7 @@ class KDE_Prior(bilby.core.prior.Prior):
         """ A prior which draws from a Gaussian KDE constructed from the input data """
         super(KDE_Prior, self).__init__(name=name, latex_label=latex_label, unit=unit)
         self.samples = samples
-        self.kde = scipy.stats.gaussian_kde(samples)
+        self.kde = gaussian_kde(samples)
         self.minimum = samples.min()
         self.maximum = samples.max()
 
@@ -484,8 +512,9 @@ class Binary:
         self.q = q
 
         # Generate white dwarf mass-radius relation spline curve
-        wd_eof = np.loadtxt('wd_mass_radius.dat', delimiter=',')
-        self._spl = scipy.interpolate.UnivariateSpline(wd_eof[:, 0], wd_eof[:, 1], s=0)
+        wd_mr_file = Path('..').joinpath('data/wd_mass_radius.dat')
+        wd_mr = np.loadtxt(wd_mr_file, delimiter=',')
+        self._spl = UnivariateSpline(wd_mr[:, 0], wd_mr[:, 1], s=0)
 
     @property
     def p0(self):

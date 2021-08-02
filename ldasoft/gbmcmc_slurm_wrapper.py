@@ -11,11 +11,12 @@ parser.add_argument("--outdir", default=Path.home().joinpath('gwemlisa/data/resu
         help="Path to output directory")
 parser.add_argument("--binaries", default=Path('binaries.dat'),
         help="Path to binary parameters file")
-parser.add_argument("--time", type=str, default="7:59:59", help="Walltime limit for job")
+parser.add_argument("--time", type=str, default="7:59:59",
+        help="Walltime limit for job (hh:mm:ss)")
 parser.add_argument("--mail-user", type=str, default=f"{getpass.getuser()}@umn.edu",
         help="Email to send job status updates")
 parser.add_argument("--sources", type=int, default=2,
-        help="Maximum number of sources allowed in model")
+        help="Maximum number of sources allowed by model")
 parser.add_argument("--samples", type=int, default=4096, help="Number of frequency bins")
 parser.add_argument("--duration", type=float, default=8, help="Observation time (years)")
 parser.add_argument("--threads", type=int, default=12, help="Number of parallel threads")
@@ -38,10 +39,10 @@ with open(Path(args.binaries), 'r') as parameters:
 
 # Set up run command
 cmd = (
-    f"srun ./gb_mcmc --inj {Path(args.outdir).joinpath('$BN'/'${BN}.dat')} --no-burnin "
-    f"--sim-noise --noiseseed $SLURM_ARRAY_TASK_ID --duration {args.duration*31457280} "
-    f"--sources {args.sources} --samples {args.samples} --chains {args.threads} --cheat "
-    f"--no-rj --rundir {Path(args.outdir).joinpath('$BN')} --threads {args.threads}"
+    f'srun ./gb_mcmc --inj {Path(args.outdir).joinpath("$BN/${BN}.dat")} --no-burnin '
+    f'--sim-noise --noiseseed $SLURM_ARRAY_TASK_ID --duration {args.duration*31457280} '
+    f'--sources {args.sources} --samples {args.samples} --chains {args.threads} --cheat '
+    f'--no-rj --rundir {Path(args.outdir).joinpath("$BN")} --threads {args.threads}'
 )
 
 # Generate slurm job script
@@ -56,14 +57,8 @@ with open(Path(args.jobdir).joinpath(f'{args.jobname}.txt'), 'w+') as job:
     job.write(f"#SBATCH --cpus-per-task={args.threads}\n")
     job.write("#SBATCH --mem=60gb\n")
     job.write("#SBATCH -p small\n\n")
-    
-    # Some random library depencies
     job.write("module load hdf5\n")
-    job.write("module load mygsl/2.6\n")
     job.write("module load gsl/2.5\n")
-    job.write("module load libmvec/1.0\n")
-    job.write("module load libm/1.0\n")
-
     job.write(f"cd {Path.home().joinpath('ldasoft/master/bin')}\n\n")
     job.write("BN=\"binary$(echo $SLURM_ARRAY_TASK_ID | sed -e :a -e 's/^.\{1,%d\}$/0&/;ta')\"\n" % (nlen-1))
     job.write(cmd)

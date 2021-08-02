@@ -8,7 +8,7 @@ from glob import glob
 from pathlib import Path
 import matplotlib.pyplot as plt
 from bilby.core.prior import Uniform
-from common import periodfind, fdotgw, sma, parameter_dict
+from common import periodfind, fdotgw, sma, q_minimum, parameter_dict
 from common import KDE_Prior, GaussianLikelihood, Binary, Observation
 
 # Set up the argument parser
@@ -35,24 +35,31 @@ args = parser.parse_args()
 if args.test:
     # Parameters useful for testing purposes
     binary = Path('binary001')
-    f, fdot, colat, lon, A, incl, psi, phi = \
-    0.002820266, 2.10334e-17, 1.40157, 4.66848, 2.07938e-23, 1.86512, 1.33296, 0.634247
+    f0, fdot, incl = 0.002820266, 2.10334e-17, 1.86512
     np.random.seed(0)
 else:
-    # Read-in true GW parameter values from chain directory files
+    # Read in true GW parameter values from chain directory files
     binary = Path(list(Path(args.chainsdir).glob(f'*{args.binary}'))[0])
-    f, fdot, colat, lon, A, incl, psi, phi = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))
+    f0, fdot, incl = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))[[0, 1, 5]]
     np.random.seed(5*args.binary + 7)
-incl = 90 - np.abs(np.degrees(incl) - 90)    # convert true incl to deg and map between 0-90 deg
-massratio = np.random.rand()*0.5 + 0.5       # generate "true" mass-ratio between 0.5-1 (m2/m1)
+# convert true inclination to degs and map betweene 0-90 degs
+incl = 90 - np.abs(np.degrees(incl) - 90)
+# generate "true" mass-ratio between 0.5-1.0 (m2/m1)
+b = Binary(f0, fdot, incl, 1)
+q_max = 1
+q_min = max(0.5, q_minimum(b.mchirp))
+massratio = (q_max - q_min)*np.random.rand() + q_min
+del b
 
 # Check if the output directory already exists
+if not Path(args.outdir).is_dir():
+    Path(args.outdir).mkdir()
 binarydir = Path(args.outdir).joinpath(binary.name)
 if not binarydir.is_dir():
     binarydir.mkdir()
 
 # Generate simulated binary white dwarf system
-b = Binary(f, fdot, incl, massratio)
+b = Binary(f0, fdot, incl, massratio)
 
 # Generate observations based on simulated binary
 o = Observation(b, numobs=args.numobs, mean_dt=args.mean_dt, std_dt=args.std_dt)
@@ -84,10 +91,10 @@ for ii, row in enumerate(data):
     err_lightcurve = Path('..').joinpath('data/JulyChimeraBJD.csv')
     if not simfile.is_file():
         cmd = (
-            f"python simulate_lightcurve.py --outdir {binarydir} --label {label} "
-            f"--error-multiplier {args.error_multiplier} --t-zero {tzero} "
-            f"--period {period} --incl {b.incl} --radius1 {b.r1} --radius2 {b.r2} "
-            f"--massratio {b.q} --err-lightcurve {err_lightcurve}"
+            f'python simulate_lightcurve.py --outdir {binarydir} --label {label} '
+            f'--error-multiplier {args.error_multiplier} --t-zero {tzero} '
+            f'--period {period} --incl {b.incl} --radius1 {b.r1} --radius2 {b.r2} '
+            f'--massratio {b.q} --err-lightcurve {err_lightcurve}'
         )
         subprocess.run([cmd], shell=True)
 
@@ -100,19 +107,19 @@ for ii, row in enumerate(data):
     # Recover parameters from the simulated lightcurve using either GW or EM priors
     if not postfile.is_file():
         cmd = (
-            f"python analyse_lightcurve.py --outdir {binarydir} --lightcurve {simfile} "
-            f"--nlive {args.nlive} --t-zero {tzero} --period {period} --incl {b.incl} "
-            f"--radius1 {b.r1} --radius2 {b.r2} --massratio {b.q}"
+            f'python analyse_lightcurve.py --outdir {binarydir} --lightcurve {simfile} '
+            f'--nlive {args.nlive} --t-zero {tzero} --period {period} --incl {b.incl} '
+            f'--radius1 {b.r1} --radius2 {b.r2} --massratio {b.q}'
         )
         if args.periodfind:
-            cmd += f" --period-err {period_err}"
+            cmd += f' --period-err {period_err}'
         if args.gwprior:
             chainfile = binary.joinpath('chains/dimension_chain.dat.1')
-            cmd += f" --gw-chain {chainfile}"
+            cmd += f' --gw-chain {chainfile}'
         subprocess.run([cmd], shell=True)
 
     # Extract inclination and t_zero data from output files for later use
-    with open(postfile) as json_file:
+    with open(postfile, 'r') as json_file:
         post_out = json.load(json_file)['posterior']['content']
         t_0.append(np.array(post_out['t_zero']))
         q.append(np.array(post_out['q']))
@@ -158,7 +165,7 @@ result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymult
                            nlive=1000, outdir=plotdir, label=f'{binary.name}_mchirp')
 
 # Read chirp mass posterior from output file
-with open(plotdir.joinpath(f'{binary.name}_mchirp_result.json')) as json_file:
+with open(plotdir.joinpath(f'{binary.name}_mchirp_result.json'), 'r') as json_file:
     mchirp = np.array(json.load(json_file)['posterior']['content']['mchirp'])
 
 # Compute base 10 logarithm of fdot based on chirp mass and frequency
@@ -172,7 +179,7 @@ figure = corner.corner(np.vstack((mchirp, fdot_log10)).T, truths=[b.mchirp, np.l
         levels=(1 - np.exp(-0.5), 1 - np.exp(-2), 1 - np.exp(-4.5)), fill_contours=True,
         max_n_ticks=3, plot_datapoints=True, show_titles=True, smooth=0.9, title_fmt='.4f')
 figure.set_size_inches(12, 12)
-plt.savefig(plotDir.joinpath(f'{binary.name}_mchirp_corner.png'), bbox_inches='tight')
+plt.savefig(plotdir.joinpath(f'{binary.name}_mchirp_corner.png'), bbox_inches='tight')
 plt.close()
 
 
