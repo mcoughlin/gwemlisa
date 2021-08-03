@@ -201,14 +201,16 @@ def periodfind(binary, observation):
     while high_side == 0:
         if dataslice[ii] < aov_peak / 2:
             high_side = periods[ii]
-            break
         ii += 1
+        if ii == periods.shape[0]:
+           high_side = periods[ii-1]
     ii = jj
     while low_side == 0:
         if dataslice[ii] < aov_peak / 2:
             low_side = periods[ii]
-            break
         ii -= 1
+        if ii == 0:
+            low_side = periods[0]
 
     period = periods[jj]
     period_err = np.mean([periods[jj]-low_side, high_side-periods[jj]]) / periods[jj]
