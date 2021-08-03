@@ -103,7 +103,7 @@ def basic_model_pdot(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, 
         flux = basic_model(phases*new_p0, t_zero, new_p0, q, incl, radius_1,
                            radius_2, ldc_1, ldc_2, gdc_2, f_c, f_s, sbratio, 
                            heat_2, t_exp, scale_factor)
-        fluxes.append(np.interp(np.mod(t_obs[ii], new_p0, flux, period=new_p0)))
+        fluxes.append(np.interp(np.mod(t_obs[ii], new_p0), t_obs, flux, period=new_p0))
     return fluxes
 
 
@@ -192,8 +192,7 @@ def periodfind(binary, observation):
     phase_bins = 20
     aov = AOV(phase_bins)
     data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test, output='periodogram')
-    slice = (o.phases-o.obstimes)*(60*60*24)
-    dataslice = data_out[0].slice
+    dataslice = data_out[0].data[:, 1]
 
     low_side, high_side = 0, 0
     jj = np.argmin(np.abs(binary.p0 - periods))

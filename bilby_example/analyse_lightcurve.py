@@ -1,11 +1,13 @@
 import bilby
 import argparse
+import warnings
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 from bilby.core.prior import Uniform, Normal
 from common import DEFAULT_INJECTION_PARAMETERS, basic_model
 from common import KDE_Prior, Uniform_Cosine_Prior, GaussianLikelihood
+warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
 # Set up the argument parser
 parser = argparse.ArgumentParser()
@@ -56,14 +58,16 @@ if args.gw_chain:
     incl_prior_vals = 90 - np.abs(np.degrees(np.arccos(data_out[:, 5])) - 90)
     priors['incl'] = KDE_Prior(incl_prior_vals, "incl", latex_label=r"$\iota$", unit="deg")
     priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="$P_0$", unit="days")
-    label += "_GW-prior"
+    label += '_GW-prior'
 else:
     # Set up EM priors for inclination and period
     priors['incl'] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$", unit="deg")
     priors['period'] = Normal(args.period, args.period_err, "period", latex_label="$P_0$", unit="days")
-    label += "_EM-prior"
+    label += '_EM-prior'
 
-result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest',
-                           nlive=args.nlive, outdir=Path(args.outdir), label=label)
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+    result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest',
+                               nlive=args.nlive, outdir=Path(args.outdir), label=label)
 parameters = {key: injection[key] for key in ['t_zero', 'period', 'incl', 'q', 'radius_1', 'radius_2']}
 result.plot_corner(parameters=parameters, priors=True)

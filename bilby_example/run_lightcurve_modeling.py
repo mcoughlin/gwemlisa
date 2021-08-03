@@ -2,6 +2,7 @@ import json
 import bilby
 import corner
 import argparse
+import warnings
 import subprocess
 import numpy as np
 from glob import glob
@@ -46,9 +47,10 @@ else:
 incl = 90 - np.abs(np.degrees(incl) - 90)
 # generate "true" mass-ratio between 0.5-1.0 (m2/m1)
 b = Binary(f0, fdot, incl, 1)
-q_max = 1
-q_min = max(0.5, q_minimum(b.mchirp))
-massratio = (q_max - q_min)*np.random.rand() + q_min
+with warnings.catch_warnings():
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+    q_min = max(0.5, q_minimum(b.mchirp))
+massratio = (1 - q_min)*np.random.rand() + q_min
 del b
 
 # Check if the output directory already exists
