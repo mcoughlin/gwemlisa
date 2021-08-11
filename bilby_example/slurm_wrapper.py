@@ -23,6 +23,10 @@ parser.add_argument("--gwprior", action="store_true", help="Use GW prior, else u
 parser.add_argument("--periodfind", action="store_true", help="Use periodfind algorithm")
 args = parser.parse_args()
 
+# Create the output directory unless it already exists
+if not Path(args.outdir).is_dir():
+    Path(args.outdir).mkdir()
+
 # Set up run command
 cmd = (
     f'python run_lightcurve_modeling.py --numobs {args.numobs} --nlive {args.nlive} '

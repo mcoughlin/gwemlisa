@@ -45,9 +45,9 @@ injection.update(dict(period=args.period, incl=args.incl, t_zero=args.t_zero,
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in injection.items() if isinstance(val, (int, float))})
 priors['scale_factor'] = Uniform(0, np.max(data['flux']), "scale_factor")
-priors['q'] = Uniform(0.5, 1, "q")
-priors['radius_1'] = Uniform(0, 1, "radius_1", latex_label="$R_1$")
-priors['radius_2'] = Uniform(0, 1, "radius_2", latex_label="$R_2$")
+priors['q'] = Uniform(0.5, 1, "massratio", latex_label="q")
+priors['radius_1'] = Uniform(0, 1, "radius_1", latex_label="$r_1$")
+priors['radius_2'] = Uniform(0, 1, "radius_2", latex_label="$r_2$")
 priors['t_zero'] = Uniform(args.t_zero - args.period/2, args.t_zero + args.period/2, 
         "t_zero", latex_label="$t_0$", unit="days")
 

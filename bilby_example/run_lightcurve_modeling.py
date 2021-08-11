@@ -25,27 +25,22 @@ parser.add_argument("--numobs", default=25, type=int, help="Number of obsevation
 parser.add_argument("--mean-dt", default=120, type=float, help="Mean time between observations")
 parser.add_argument("--std-dt", default=5, type=float,
         help="Standard deviation of time between observations")
-parser.add_argument("--gwprior", action="store_true", help="Use GW prior, otherwise use EM prior")
-parser.add_argument("--periodfind", action="store_true", help="Enable periodfind algorithm")       
 parser.add_argument("--nlive", default=250, type=int,
         help="Number of live points used for lightcurve sampling")
-parser.add_argument("--test", action="store_true", help="Enable test parameters")
+parser.add_argument("--gwprior", action="store_true", help="Use GW prior, otherwise use EM prior")
+parser.add_argument("--periodfind", action="store_true", help="Enable periodfind algorithm")       
 args = parser.parse_args()
 
 
-if args.test:
-    # Parameters useful for testing purposes
-    binary = Path('binary001')
-    f0, fdot, incl = 0.002820266, 2.10334e-17, 1.86512
-    np.random.seed(0)
-else:
-    # Read in true GW parameter values from chain directory files
-    binary = Path(list(Path(args.chainsdir).glob(f'*{args.binary}'))[0])
-    f0, fdot, incl = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))[[0, 1, 5]]
-    np.random.seed(5*args.binary + 7)
+# Read in true GW parameter values from chain directory files
+binary = Path(list(Path(args.chainsdir).glob(f'*{args.binary}'))[0])
+f0, fdot, incl = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))[[0, 1, 5]]
+
 # convert true inclination to degs and map betweene 0-90 degs
 incl = 90 - np.abs(np.degrees(incl) - 90)
-# generate "true" mass-ratio between 0.5-1.0 (m2/m1)
+
+# generate "true" mass-ratio between ~0.5-1.0 (m2/m1)
+np.random.seed(5*args.binary + 7)
 b = Binary(f0, fdot, incl, 1)
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -54,8 +49,6 @@ massratio = (1 - q_min)*np.random.rand() + q_min
 del b
 
 # Check if the output directory already exists
-if not Path(args.outdir).is_dir():
-    Path(args.outdir).mkdir()
 binarydir = Path(args.outdir).joinpath(binary.name)
 if not binarydir.is_dir():
     binarydir.mkdir()
@@ -65,7 +58,7 @@ b = Binary(f0, fdot, incl, massratio)
 
 # Generate observations based on simulated binary
 o = Observation(b, numobs=args.numobs, mean_dt=args.mean_dt, std_dt=args.std_dt)
-data = np.array([o.obstimes, o.phases-o.obstimes, o.freqs]).T
+t_obs, t_res = o.obstimes, o.phases-o.obstimes
 
 if args.periodfind:
     # Recover the period using the periodfind algorithm
@@ -77,16 +70,16 @@ with open(binarydir.joinpath(f'{binary.name}_parameters.json'), 'w+') as paramet
 
 
 t_0, q, inc = [], [], []
-for ii, row in enumerate(data):
+for ii, data in enumerate(np.array([t_obs, t_res, o.freqs]).T):
     if ii % args.every != 0:
         continue
 
     # Simulate binary lightcurve based on true parameters
     label = f'{binary.name}_row{ii}'
-    tzero = row[0] + row[1]
+    tzero = data[0] + data[1]
     if not args.periodfind:
         # Estimate the period based on the observations
-        period = 2/row[2] / (60*60*24)
+        period = 2/data[2] / (60*60*24)
 
     filelabel = f'{label}_incl{incl:.2f}'
     simfile = binarydir.joinpath(f'{filelabel}.dat')
@@ -134,28 +127,29 @@ if not plotdir.is_dir():
     plotdir.mkdir()
 
 # Compute eclipse times and residuals
-phtimes = np.array([np.median(t) for t in t_0])
-med_res = np.array([np.median(r) for r in (t_0 - data[:, 0])*(60*60*24)])
-std_res = np.array([np.std(r) for r in (t_0 - data[:, 0])*(60*60*24)])
+t_0 = np.array(t_0, dtype=object)
+t_eclipse = np.array([np.median(t) for t in t_0])
+med_delta_t = np.array([np.median(r) for r in (t_obs - t_0)*(60*60*24)])
+std_delta_t = np.array([np.std(r) for r in (t_obs - t_0)*(60*60*24)])
 
 # Plot residuals against time
-plt.figure(figsize=(10, 6))
-plt.plot(phtimes, -1/2*(b.fdot/b.f0)*(phtimes*(60*60*24))**2, 'go', label="theory w/ fdot")
-plt.plot(phtimes, (phtimes-data[:, 0]-data[:, 1])*(60*60*24), 'r^', label="theory w/o fdot")
-plt.errorbar(phtimes, med_res, yerr=std_res, fmt='kx', label="observed")
-plt.xlabel(r"$\Delta T$ [days]")
-plt.ylabel("Residual [seconds]")
+plt.figure(figsize=(12, 8))
+plt.plot(t_eclipse, -1/2*(b.fdot/b.f0)*(t_eclipse*(60*60*24))**2, 'go', label="theory w/ fdot")
+plt.plot(t_eclipse, (t_eclipse-t_obs-t_res)*(60*60*24), 'r^', label="theory w/o fdot")
+plt.errorbar(t_eclipse, -med_delta_t, yerr=std_delta_t, fmt='kx', label="observed")
+plt.xlabel("time of observation [days]", fontsize=16)
+plt.ylabel(r"$\Delta t_{eclipse}$ [seconds]", fontsize=16)
 plt.legend()
 plt.savefig(plotdir.joinpath(f'{binary.name}_residual.png'), bbox_inches='tight')
 plt.close()
 
 
 # Function to compute residuals from eclipse times, frequency, and chirp mass
-def res_model(phtime, mchirp, f0):
-    return -1/2 * (fdotgw(mchirp, f0) / f0) * (phtime*(60*60*24))**2
+def res_model(delta_t, mchirp, f0):
+    return -1/2 * (fdotgw(mchirp, f0) / f0) * (delta_t*(60*60*24))**2
 
 # Set up the likelihood function
-likelihood = GaussianLikelihood(phtimes, med_res, res_model, std_res)
+likelihood = GaussianLikelihood(t_eclipse, -med_delta_t, res_model, std_delta_t)
 
 # Set up the priors and injection parameters
 injection = dict(mchirp=b.mchirp, f0=b.f0)

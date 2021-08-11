@@ -619,8 +619,8 @@ class Observation:
 
     @property
     def phases(self):
-        phtimes = self.obstimes - self.t_zero
-        return phtimes - 1/2*(self.binary.fdot/self.binary.f0)*(60*60*24)*phtimes**2
+        delta_t = self.obstimes - self.t_zero
+        return delta_t - 1/2*(self.binary.fdot/self.binary.f0)*(60*60*24)*delta_t**2
 
     @property
     def freqs(self):
