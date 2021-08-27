@@ -7,20 +7,18 @@ from common import DEFAULT_INJECTION_PARAMETERS, basic_model
 # Set up the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", help="path to the ouput directory")
-parser.add_argument("--label", help="label for the ouput lightcurve")
-parser.add_argument("--incl", default=90, type=float, help="inclination [degrees]")
-parser.add_argument("--period", default=0.004, type=float, help="period [days]")
-parser.add_argument("--t-zero", default=563041, type=float, help="t-zero")
-parser.add_argument("--massratio", default=0.4, type=float, help="mass ratio (m2/m1)")
-parser.add_argument("--radius1", default=0.125, type=float,
-        help="radius 1 (scaled by semi-major axis)")
-parser.add_argument("--radius2", default=0.3, type=float,
-        help="radius 2 (scaled by semi-major axis)")
+parser.add_argument("--label", type=str, help="label for the ouput lightcurve")
+parser.add_argument("--incl", type=float, help="inclination [degrees]")
+parser.add_argument("--period", type=float, help="period [days]")
+parser.add_argument("--t-zero", type=float, help="t-zero")
+parser.add_argument("--massratio", type=float, help="mass ratio (m2/m1)")
+parser.add_argument("--radius1", type=float, help="radius 1 (scaled)")
+parser.add_argument("--radius2", type=float, help="radius 2 (scaled)")
 parser.add_argument("--error-multiplier", default=0.1, type=float,
         help="lightcurve noise error multiplier")
 parser.add_argument("--err-lightcurve",
-        default=Path('..').joinpath('data').joinpath('JulyChimeraBJD.csv'),
-        help="path to the lightcurve file to use for times and uncertainties")
+        default=Path('..').joinpath('data/JulyChimeraBJD.csv'),
+        help="path to the lightcurve file used for uncertainties")
 args = parser.parse_args()
 
 # Check that the output directory exists

@@ -217,27 +217,48 @@ def periodfind(binary, observation):
     return period, period_err
 
 
-def fdotgw(mchirp, f0):
+def fdotgw(mchirp, p0):
     """
-    Function which computes fdot from chirp mass and frequency
+    Function which computes fdot from chirp mass and period
 
     Parameters
     ==========
     mchirp : array_like
         chirp mass [Solar Masses]
 
-    f0 : float
-        starting GW frequency [Hz]
+    p0 : float
+        starting orbital period [days]
 
     Returns
     =======
     fdot : float array
         rate of change of GW frequency [Hz/s]
     """
+    f0 = 2/p0 / (60*60*24)
     return 96/5 * np.pi**(8/3) * (G * mchirp*MSUN / c**3)**(5/3) * f0**(11/3)
 
 
-def sma(p0, mchirp, q):
+def chirp_mass(f0, fdot):
+    """
+    Function which computes chirp mass from frequency and fdot
+
+    Parameters
+    ==========
+    f0 : array_like
+        starting GW frequency [Hz]
+
+    fdot : array_like
+        rate of change of GW frequency [Hz/s]
+
+    Returns
+    =======
+    mchirp : float array
+        chirp mass [Solar Masses]
+    """
+    return c**3/G*(5/96*np.pi**(-8/3) * f0**(-11/3) * fdot)**(3/5) / MSUN
+
+
+def semi_major_axis(p0, mchirp, q):
     """
     Function which computes semi-major axis from period, chirp mass, and mass ratio
 
@@ -285,7 +306,7 @@ def q_minimum(mchirp):
     return q_min
 
 
-def parameter_dict(binary):
+def parameter_dict(binary, observation):
     """ 
     Function which organizes binary parameters into a dictionary structure
 
@@ -293,6 +314,9 @@ def parameter_dict(binary):
     ==========
     binary : Binary
         binary object to get parameters from
+
+    observation : Observation
+        observation object to get observational parameters from
 
     Returns
     =======
@@ -384,6 +408,16 @@ def parameter_dict(binary):
             'value': binary.tcoal/(60*60*24*365.25),
             'description': 'time to coalescence',
             'unit': 'yr'
+        },
+        '$t_0$': {
+            'value': list(observation.phases),
+            'description': 'reference epoch for each observation',
+            'unit': 'day'
+        },
+        'P': {
+            'value': list(observation.periods*(60*24)),
+            'description': 'period at each observation time',
+            'unit': 'min'
         }
     }
     return parameter_dict
@@ -571,7 +605,7 @@ class Binary:
 
 
 class Observation:
-    def __init__(self, binary, t_zero=0, numobs=25, mean_dt=120, std_dt=5):
+    def __init__(self, binary, t_obs=None, t_zero=0, numobs=25, mean_dt=120, std_dt=5):
         """
         A class for representing EM observations of a binary object
 
@@ -579,6 +613,10 @@ class Observation:
         ==========
         binary : Binary
             binary object being observed
+
+        t_obs : float array
+            array with observation times [days].
+            If specified, all other observation parameters are ignored.
 
         t_zero : float
             starting time of observations [days]
@@ -600,18 +638,22 @@ class Observation:
         phases : float array
             times of eclipses [days]
 
-        freqs : float array
-            frequencies at observation times [Hz]
+        periods : float array
+            orbital periods at observation times [days]
         """
         self.binary = binary
+        self.t_obs = t_obs
         self.t_zero = t_zero
         self.numobs = numobs
         self.mean_dt = mean_dt
         self.std_dt = std_dt
-        t = np.full(self.numobs, self.t_zero)
-        for i in range(1, len(t)):
-            t[i] = t[i-1] + np.abs(np.random.normal(self.mean_dt, self.std_dt, 1))
-        self._t = t
+        if self.t_obs is None:
+            t = np.full(self.numobs, self.t_zero)
+            for i in range(1, len(t)):
+                t[i] = t[i-1] + np.abs(np.random.normal(self.mean_dt, self.std_dt, 1))
+            self._t = t
+        else:
+            self._t = self.t_obs
 
     @property
     def obstimes(self):
@@ -623,6 +665,6 @@ class Observation:
         return delta_t - 1/2*(self.binary.fdot/self.binary.f0)*(60*60*24)*delta_t**2
 
     @property
-    def freqs(self):
-        tau = self.binary.tcoal - self.obstimes*(60*60*24)
-        return 1/np.pi * (256/5*tau)**(-3/8) * (G*self.binary.mchirp*MSUN/c**3)**(-5/8)
+    def periods(self):
+        tau = 3/8 * (self.binary.f0/self.binary.fdot) / (60*60*24)
+        return 2/self.binary.f0 * (1 - self.obstimes/tau)**(3/8) / (60*60*24)

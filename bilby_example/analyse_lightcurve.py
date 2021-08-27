@@ -12,17 +12,22 @@ warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 # Set up the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", help="path to the ouput directory")
-parser.add_argument("--lightcurve", help="path to lightcurve file")
-parser.add_argument("--nth-in", default=10, type=int, help="read every nth line from lightcurve file")
+parser.add_argument("--lightcurve", help="path to the lightcurve file")
+parser.add_argument("--nth-in", default=10, type=int,
+        help="read every nth line of the lightcurve file")
 parser.add_argument("--gw-chain", help="chain file for computing GW priors")
-parser.add_argument("--incl", default=90, type=float, help="inclination [deg])")
-parser.add_argument("--period", default=0.004, type=float, help="period [days]")
-parser.add_argument("--period-err", default=1e-5, type=float, help="period uncertainty [days]")
-parser.add_argument("--t-zero", default=563041, type=float, help="t-zero [days]")
-parser.add_argument("--massratio", default=0.4, type=float, help="mass ratio (m2/m1)")
-parser.add_argument("--radius1", default=0.125, type=float, help="radius 1 (scaled by semi-major axis)")
-parser.add_argument("--radius2", default=0.3, type=float, help="radius 2 (scaled by semi-major axis)")
-parser.add_argument("--nlive", default=250, type=int, help="number of live points used for sampling")
+parser.add_argument("--incl", type=float, help="inclination [deg])")
+parser.add_argument("--period", type=float, help="period [days]")
+parser.add_argument("--period-err", default=1e-5, type=float,
+        help="period uncertainty [days]")
+parser.add_argument("--t-zero", type=float, help="t-zero [days]")
+parser.add_argument("--massratio", type=float, help="mass ratio (m2/m1)")
+parser.add_argument("--radius1", type=float, help="radius 1 (scaled)")
+parser.add_argument("--radius2", type=float, help="radius 2 (scaled)")
+parser.add_argument("--pdot", default=9, type=float,
+        help="time rate of change of period")
+parser.add_argument("--nlive", default=250, type=int,
+        help="number of live points used for sampling")
 args = parser.parse_args()
 
 # The output directory is based on the input lightcurve
@@ -54,10 +59,11 @@ priors['t_zero'] = Uniform(args.t_zero - args.period/2, args.t_zero + args.perio
 if args.gw_chain:
     # Set up GW priors for inclination and period
     data_out = np.loadtxt(Path(args.gw_chain))
-    period_prior_vals = 2/data_out[:, 0] / (60*60*24)
+    tau = 3/8 * args.period/args.pdot
+    period_prior_vals = (2/data_out[:, 0] / (60*60*24)) * (1 - args.t_zero/tau)**(3/8)
     incl_prior_vals = 90 - np.abs(np.degrees(np.arccos(data_out[:, 5])) - 90)
-    priors['incl'] = KDE_Prior(incl_prior_vals, "incl", latex_label=r"$\iota$", unit="deg")
-    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="$P_0$", unit="days")
+    priors['incl'] = KDE_Prior(incl_prior_vals, "incl", latex_label=r"$\iota$", unit="$^\circ$")
+    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="P", unit="days")
     label += '_GW-prior'
 else:
     # Set up EM priors for inclination and period
