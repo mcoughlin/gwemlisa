@@ -96,10 +96,10 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
 def basic_model_pdot(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2,
                      gdc_2, f_c, f_s, sbratio, heat_2, t_exp, scale_factor, pdot):
     """ Wrapper for basic_model which uses pdot to compute flux at phase folded times """
-    phases = pdot_phasefold(t_obs, period, pdot*(60*60*24)**2)
+    phases = pdot_phasefold(t_obs, period, pdot)
     fluxes = []
     for ii in range(len(t_obs)):
-        new_p0 = period - pdot*t_obs[ii]*(60*60*24)**2
+        new_p0 = period - pdot*t_obs[ii]
         flux = basic_model(phases*new_p0, t_zero, new_p0, q, incl, radius_1,
                            radius_2, ldc_1, ldc_2, gdc_2, f_c, f_s, sbratio, 
                            heat_2, t_exp, scale_factor)

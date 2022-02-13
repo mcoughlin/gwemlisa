@@ -24,8 +24,7 @@ parser.add_argument("--t-zero", type=float, help="t-zero [days]")
 parser.add_argument("--massratio", type=float, help="mass ratio (m2/m1)")
 parser.add_argument("--radius1", type=float, help="radius 1 (scaled)")
 parser.add_argument("--radius2", type=float, help="radius 2 (scaled)")
-parser.add_argument("--pdot", default=9, type=float,
-        help="time rate of change of period")
+parser.add_argument("--pdot", type=float, help="time rate of change of period")
 parser.add_argument("--nlive", default=250, type=int,
         help="number of live points used for sampling")
 args = parser.parse_args()
