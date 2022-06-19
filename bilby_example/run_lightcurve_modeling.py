@@ -15,7 +15,7 @@ from common import GaussianLikelihood, KDE_Prior, Binary, Observation
 # Set up the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", default=Path('out_gwprior'), help="Path to output directory")
-parser.add_argument("--error-multiplier", default=0.1, type=float,
+parser.add_argument("--error-mult", default=0.1, type=float,
         help="Simulated lightcurve error multiplier")
 parser.add_argument("--chainsdir", default=Path.home().joinpath('gwemlisa/data/results'),
         help="Path to binaries directory")
@@ -38,12 +38,12 @@ f0, fdot, incl = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))[[0, 1, 5]]
 # convert true inclination to degs and map betweene 0-90 degs
 incl = 90 - np.abs(np.degrees(incl) - 90)
 
-# generate "true" mass-ratio between ~0.5-1.0 (m2/m1)
+# generate "true" mass-ratio between ~0.4-1.0 (m2/m1)
 np.random.seed(5*args.binary + 7)
 b = Binary(f0, fdot, incl, 1)
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category=RuntimeWarning)
-    q_min = max(0.5, q_minimum(b.mchirp))
+    q_min = max(0.4, q_minimum(b.mchirp))
 massratio = (1 - q_min)*np.random.rand() + q_min
 del b
 
@@ -65,9 +65,19 @@ if args.periodfind:
     del o
     o = Observation(Binary(2/period/(60*60*24), fdot, incl, massratio), t_obs=t_obs)
 
+# Generate lightcurve specific parameters
+lcp = {}
+lcp['sbratio'] = 0.95 * np.random.rand() + 0.05
+lcp['ldc_1'] = np.random.rand()
+lcp['ldc_2'] = np.random.rand()
+lcp['gdc_1'] = np.random.rand()
+lcp['gdc_2'] = np.random.rand()
+lcp['heat_1'] = 5*np.random.rand()
+lcp['heat_2'] = 5*np.random.rand()
+
 # Write binary parameters to json file
 with open(binarydir.joinpath(f'{binary.name}_parameters.json'), 'w+') as parameters:
-    json.dump(parameter_dict(b, o), parameters, indent=2)
+    json.dump(parameter_dict(b, o, lcp), parameters, indent=2)
 
 
 t_0, P, q, inc = [], [], [], []
@@ -76,13 +86,14 @@ for ii, data in enumerate(np.array([t_phase, o.periods]).T):
     label = f'{binary.name}_row{ii}'
     filelabel = f'{label}_incl{incl:.2f}'
     simfile = binarydir.joinpath(f'{filelabel}.dat')
-    err_lightcurve = Path('..').joinpath('data/JulyChimeraBJD.csv')
+    error_lc = Path('..').joinpath('data/JulyChimeraBJD.csv')
     if not simfile.is_file():
         cmd = (
             f'python simulate_lightcurve.py --outdir {binarydir} --label {label} '
-            f'--error-multiplier {args.error_multiplier} --t-zero {data[0]} '
-            f'--period {data[1]} --incl {b.incl} --radius1 {b.r1} --radius2 {b.r2} '
-            f'--massratio {b.q} --err-lightcurve {err_lightcurve}'
+            f'--t-zero {data[0]} --period {data[1]} --incl {b.incl} --massratio {b.q} ' 
+            f'--radius {b.r1} {b.r2} --sbratio {lcp["sbratio"]} --ldc {lcp["ldc_1"]} '
+            f'{lcp["ldc_2"]} --gdc {lcp["gdc_1"]} {lcp["gdc_2"]} --heat {lcp["heat_1"]} '
+            f'{lcp["heat_2"]} --error-mult {args.error_mult} --error-lc {error_lc}'
         )
         subprocess.run([cmd], shell=True)
 
@@ -96,8 +107,10 @@ for ii, data in enumerate(np.array([t_phase, o.periods]).T):
     if not postfile.is_file():
         cmd = (
             f'python analyse_lightcurve.py --outdir {binarydir} --lightcurve {simfile} '
-            f'--nlive {args.nlive} --t-zero {data[0]} --period {data[1]} --incl {b.incl} '
-            f'--radius1 {b.r1} --radius2 {b.r2} --massratio {b.q} --pdot {b.pdot}'
+            f'--t-zero {data[0]} --period {data[1]} --incl {b.incl} --massratio {b.q} '
+            f'--radius {b.r1} {b.r2} --sbratio {lcp["sbratio"]} --ldc {lcp["ldc_1"]} '
+            f'{lcp["ldc_2"]} --gdc {lcp["gdc_1"]} {lcp["gdc_2"]} --heat {lcp["heat_1"]} '
+            f'{lcp["heat_2"]} --pdot {b.pdot} --nlive {args.nlive}'
         )
         if args.periodfind:
             cmd += f' --period-err {period_err}'
@@ -154,7 +167,7 @@ if args.gwprior:
     priors['mchirp'] = KDE_Prior(mchirp_prior_vals, "mchirp",
                                  latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
 else:
-    priors['mchirp'] = Uniform(0, 1.25, "mchirp",
+    priors['mchirp'] = Uniform(0.05, 1.25, "mchirp",
                                latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
 priors['period'] = KDE_Prior(P[0], "period", latex_label="$P_0$", unit="days")
 
@@ -184,8 +197,8 @@ likelihood = GaussianLikelihood(period, b.k2, k2_model, std_k2)
 injection = dict(mchirp=b.mchirp, incl=b.incl, q=b.q)
 priors = bilby.core.prior.PriorDict()
 priors['mchirp'] = KDE_Prior(mchirp, "mchirp", latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
-priors['incl'] = KDE_Prior(inc[0], "incl", latex_label=r"$\iota$", unit="$^\circ$")
-priors['q'] = KDE_Prior(q[0], "q", latex_label="q")
+priors['incl'] = KDE_Prior(inc[0], "incl", latex_label=r"$\iota$", unit="$^\circ$", minimum=0, maximum=90)
+priors['q'] = KDE_Prior(q[0], "q", latex_label="q", minimum=0.15, maximum=1)
 
 result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest',
                            nlive=1000, outdir=plotdir, label=f'{binary.name}_massratio')

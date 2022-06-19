@@ -15,13 +15,13 @@ MSUN = 1.989e30    # solar mass (kg)
 
 # Default injection values
 DEFAULT_INJECTION_PARAMETERS = dict(
-    ldc_1=0.2, ldc_2=0.4548, gdc_2=0.61, scale_factor=1, incl=90,
-    f_c=0, f_s=0, sbratio=0.25, heat_2=5, t_exp=3/(60*60*24)
+    ldc_1=0.2, ldc_2=0.4548, gdc_1=None, gdc_2=0.61, scale_factor=1, incl=90,
+    f_c=0, f_s=0, sbratio=0.25, heat_1=None, heat_2=5, t_exp=3/(60*60*24)
 )
 
 
-def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
-                ldc_2, gdc_2, f_c, f_s, sbratio, heat_2, t_exp, scale_factor):
+def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2,
+                gdc_1, gdc_2, f_c, f_s, sbratio, heat_1, heat_2, t_exp, scale_factor):
     """
     Function which returns flux values at times t_obs
 
@@ -54,8 +54,11 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
     ldc_2 : float
         limb darkening coefficient for body 2
 
+    gdc_1 : float
+        gravity darkening coefficient for body 1
+
     gdc_2 : float
-        gravity darkening exponent for body 2
+        gravity darkening coefficient for body 2
 
     f_c : float
         sqrt(e)*cos(w) where e is eccentricity and w is longitude of periastron
@@ -65,6 +68,9 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
 
     sbratio : float
         surface brightness ratio (S2/S1)
+
+    heat_1 : float
+        coefficient for simplified reflection model
 
     heat_2 : float
         coefficient for simplified reflection model
@@ -82,10 +88,10 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
     """
     try:
         flux = ellc.lc(
-            t_obs=t_obs, t_zero=t_zero, period=period, q=q, incl=incl,
-            radius_1=radius_1, radius_2=radius_2, ldc_1=ldc_1, ldc_2=ldc_2,
-            gdc_2=gdc_2, f_c=f_c, f_s=f_s, sbratio=sbratio, heat_2=heat_2,
-            t_exp=t_exp, verbose=0, shape_1='sphere', shape_2='roche',
+            t_obs=t_obs, t_zero=t_zero, period=period, q=q, incl=incl, radius_1=radius_1,
+            radius_2=radius_2, ld_1='lin', ldc_1=ldc_1, ld_2='lin', ldc_2=ldc_2,
+            gdc_1=gdc_1, gdc_2=gdc_2, heat_1=heat_1, heat_2=heat_2, sbratio=sbratio,
+            f_c=f_c, f_s=f_s, t_exp=t_exp, verbose=0, shape_1='roche', shape_2='roche',
             grid_1='very_sparse', grid_2='very_sparse', exact_grav=False
         )
     except Exception as e:
@@ -94,15 +100,18 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1,
 
 
 def basic_model_pdot(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2,
-                     gdc_2, f_c, f_s, sbratio, heat_2, t_exp, scale_factor, pdot):
+                     gdc_1, gdc_2, f_c, f_s, sbratio, heat_1, heat_2, t_exp, scale_factor, pdot):
     """ Wrapper for basic_model which uses pdot to compute flux at phase folded times """
     phases = pdot_phasefold(t_obs, period, pdot)
     fluxes = []
     for ii in range(len(t_obs)):
         new_p0 = period - pdot*t_obs[ii]
-        flux = basic_model(phases*new_p0, t_zero, new_p0, q, incl, radius_1,
-                           radius_2, ldc_1, ldc_2, gdc_2, f_c, f_s, sbratio, 
-                           heat_2, t_exp, scale_factor)
+        flux = basic_model(
+            t_obs=phases*new_p0, t_zero=t_zero, period=new_p0, q=q, incl=incl,
+            radius_1=radius_1, radius_2=radius_2, ldc_1=ldc_1, ldc_2=ldc_2,
+            gdc_1=gdc_1, gdc_2=gdc_2, sbratio=sbratio, f_c=f_c, f_s=f_s,
+            heat_1=heat_1, heat_2=heat_2, t_exp=t_exp, scale_factor=scale_factor
+        )
         fluxes.append(np.interp(np.mod(t_obs[ii], new_p0), t_obs, flux, period=new_p0))
     return fluxes
 
@@ -306,7 +315,7 @@ def q_minimum(mchirp):
     return q_min
 
 
-def parameter_dict(binary, observation):
+def parameter_dict(binary, observation, lightcurve):
     """ 
     Function which organizes binary parameters into a dictionary structure
 
@@ -316,7 +325,10 @@ def parameter_dict(binary, observation):
         binary object to get parameters from
 
     observation : Observation
-        observation object to get observational parameters from
+        observation object to get parameters from
+
+    lightcurve : dict
+        lightcurve parameters [sbratio, ldc_1, ldc_2, gdc_1, gdc_2, heat_1, heat_2]
 
     Returns
     =======
@@ -399,6 +411,41 @@ def parameter_dict(binary, observation):
             'description': 'line-of-sight radial velocity of body 2',
             'unit': 'km/s'
         },
+        'J': {
+            'value': lightcurve['sbratio'],
+            'description': 'surface brightness ratio (S1/S2)',
+            'unit': None
+        },
+        '$ldc_1$': {
+            'value': lightcurve['ldc_1'],
+            'description': 'limb darkening coefficient of body 1',
+            'unit': None
+        },
+        '$ldc_2$': {
+            'value': lightcurve['ldc_2'],
+            'description': 'limb darkening coefficient of body 2',
+            'unit': None
+        },
+        '$gdc_1$': {
+            'value': lightcurve['gdc_1'],
+            'description': 'gravity darkening coefficient of body 1',
+            'unit': None
+        },
+        '$gdc_2$': {
+            'value': lightcurve['gdc_2'],
+            'description': 'gravity darkening coefficient of body 2',
+            'unit': None
+        },
+        '$heat_1$': {
+            'value': lightcurve['heat_1'],
+            'description': 'reflection model coefficient for body 1',
+            'unit': None
+        },
+        '$heat_2$': {
+            'value': lightcurve['heat_2'],
+            'description': 'reflection model coefficient for body 2',
+            'unit': None
+        },
         'b': {
             'value': binary.b,
             'description': 'impact parameter',
@@ -424,13 +471,17 @@ def parameter_dict(binary, observation):
 
 
 class KDE_Prior(bilby.core.prior.Prior):
-    def __init__(self, samples, name=None, latex_label=None, unit=None):
+    def __init__(self, samples, name=None, latex_label=None, unit=None, minimum=None, maximum=None):
         """ A prior which draws from a Gaussian KDE constructed from the input data """
         super(KDE_Prior, self).__init__(name=name, latex_label=latex_label, unit=unit)
+        self.minimum = minimum
+        self.maximum = maximum
         self.samples = samples
         self.kde = gaussian_kde(samples)
-        self.minimum = samples.min()
-        self.maximum = samples.max()
+        if self.minimum is None:
+            self.minimum = samples.min()
+        if self.maximum is None:
+            self.maximum = samples.max()
 
     def sample(self, size=1):
         return self.kde.resample(size=size)
