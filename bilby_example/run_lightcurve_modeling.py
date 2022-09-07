@@ -39,11 +39,11 @@ f0, fdot, incl = np.loadtxt(binary.joinpath(f'{binary.name}.dat'))[[0, 1, 5]]
 incl = 90 - np.abs(np.degrees(incl) - 90)
 
 # generate "true" mass-ratio between ~0.4-1.0 (m2/m1)
-np.random.seed(5*args.binary + 7)
+np.random.seed(7*args.binary + 11)
 b = Binary(f0, fdot, incl, 1)
 with warnings.catch_warnings():
     warnings.filterwarnings('ignore', category=RuntimeWarning)
-    q_min = max(0.4, q_minimum(b.mchirp))
+    q_min = max(0.25, q_minimum(b.mchirp))
 massratio = (1 - q_min)*np.random.rand() + q_min
 del b
 
@@ -59,12 +59,6 @@ b = Binary(f0, fdot, incl, massratio)
 o = Observation(b, numobs=args.numobs, mean_dt=args.mean_dt, std_dt=args.std_dt)
 t_obs, t_phase = o.obstimes, o.phases
 
-# Recover the period using the periodfind algorithm
-if args.periodfind:
-    period, period_err = periodfind(b, o)
-    del o
-    o = Observation(Binary(2/period/(60*60*24), fdot, incl, massratio), t_obs=t_obs)
-
 # Generate lightcurve specific parameters
 lcp = {}
 lcp['sbratio'] = 0.95 * np.random.rand() + 0.05
@@ -75,9 +69,16 @@ lcp['gdc_2'] = np.random.rand()
 lcp['heat_1'] = 5*np.random.rand()
 lcp['heat_2'] = 5*np.random.rand()
 
+# Recover the period using the periodfind algorithm
+period, period_err = None, None
+if args.periodfind:
+    period, period_err = periodfind(b, o, lcp)
+    del o
+    o = Observation(Binary(2/period, fdot, incl, massratio), t_obs=t_obs)
+
 # Write binary parameters to json file
 with open(binarydir.joinpath(f'{binary.name}_parameters.json'), 'w+') as parameters:
-    json.dump(parameter_dict(b, o, lcp), parameters, indent=2)
+    json.dump(parameter_dict(b, o, lcp, period, period_err), parameters, indent=2)
 
 
 t_0, P, q, inc = [], [], [], []
@@ -136,14 +137,14 @@ if not plotdir.is_dir():
 # Compute eclipse times and residuals
 t_0 = np.array(t_0, dtype=object)
 t_eclipse = np.array([np.median(t) for t in t_0])
-med_delta_t = np.array([np.median(r) for r in (t_obs - t_0)*(60*60*24)])
-std_delta_t = np.array([np.std(r) for r in (t_obs - t_0)*(60*60*24)])
+med_delta_t = np.array([np.median(r) for r in (t_obs - t_0)])
+std_delta_t = np.array([np.std(r) for r in (t_obs - t_0)])
 
 # Plot residuals against time
 plt.figure(figsize=(12, 8))
-plt.plot(t_eclipse, -1/2*(b.fdot/b.f0)*(t_eclipse*(60*60*24))**2, 'go', label="theory w/ fdot")
-plt.plot(t_eclipse, (t_eclipse-t_phase)*(60*60*24), 'r^', label="theory w/o fdot")
-plt.errorbar(t_eclipse, -med_delta_t, yerr=std_delta_t, fmt='kx', label="observed")
+plt.plot(t_eclipse/(60*60*24), -1/2*(b.fdot/b.f0)*t_eclipse**2, 'go', label="theory w/ fdot")
+plt.plot(t_eclipse/(60*60*24), (t_eclipse-t_phase), 'r^', label="theory w/o fdot")
+plt.errorbar(t_eclipse/(60*60*24), -med_delta_t, yerr=std_delta_t, fmt='kx', label="observed")
 plt.xlabel("time of observation [days]", fontsize=16)
 plt.ylabel(r"$\Delta t_{eclipse}$ [seconds]", fontsize=16)
 plt.legend()
@@ -153,7 +154,7 @@ plt.close()
 
 # Function to compute residuals from residual eclipse times, chirp mass, and period
 def res_model(delta_t, mchirp, period):
-    return (-1/2 * (fdotgw(mchirp, period)/2) * (delta_t*(60*60*24))**2) * period*(60*60*24)
+    return -1/2 * fdotgw(mchirp, period) * period/2 * delta_t**2
 
 # Set up the likelihood function
 likelihood = GaussianLikelihood(t_eclipse, -med_delta_t, res_model, std_delta_t)
@@ -163,13 +164,13 @@ injection = dict(mchirp=b.mchirp, period=b.p0)
 priors = bilby.core.prior.PriorDict()
 if args.gwprior:
     chaindata = np.loadtxt(binary.joinpath('chains/dimension_chain.dat.1'))
-    mchirp_prior_vals = chirp_mass(chaindata[:, 0], chaindata[:, 1])
-    priors['mchirp'] = KDE_Prior(mchirp_prior_vals, "mchirp",
-                                 latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
+    mchirp_prior = chirp_mass(chaindata[:, 0], chaindata[:, 1])
+    priors['mchirp'] = KDE_Prior(mchirp_prior, "mchirp", latex_label=r"$\mathcal{M}$",
+                                 unit=r"$M_{\odot}$", minimum=0.05, maximum=1.25)
 else:
     priors['mchirp'] = Uniform(0.05, 1.25, "mchirp",
                                latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
-priors['period'] = KDE_Prior(P[0], "period", latex_label="$P_0$", unit="days")
+priors['period'] = KDE_Prior(P[0], "period", latex_label="$P_0$", unit="s")
 
 result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest',
                            nlive=1000, outdir=plotdir, label=f'{binary.name}_mchirp')
@@ -187,7 +188,7 @@ if not args.periodfind:
 
 # Function to compute k2 from period, chirp mass, inclination, and mass ratio
 def k2_model(p0, mchirp, incl, q):
-    return 2*np.pi*semi_major_axis(p0, mchirp, q)*np.sin(np.radians(incl))/((1+q)*(p0*(60*60*24)))
+    return (2*np.pi/(p0*(1+q)))*semi_major_axis(p0, mchirp, q)*np.sin(np.radians(incl))
 
 # Set up likelihood function
 std_k2 = 50
@@ -196,8 +197,10 @@ likelihood = GaussianLikelihood(period, b.k2, k2_model, std_k2)
 # Set up priors and injection parameters
 injection = dict(mchirp=b.mchirp, incl=b.incl, q=b.q)
 priors = bilby.core.prior.PriorDict()
-priors['mchirp'] = KDE_Prior(mchirp, "mchirp", latex_label=r"$\mathcal{M}$", unit=r"$M_{\odot}$")
-priors['incl'] = KDE_Prior(inc[0], "incl", latex_label=r"$\iota$", unit="$^\circ$", minimum=0, maximum=90)
+priors['mchirp'] = KDE_Prior(mchirp, "mchirp", latex_label=r"$\mathcal{M}$",
+                             unit=r"$M_{\odot}$", minimum=0.05, maximum=1.25)
+priors['incl'] = KDE_Prior(inc[0], "incl", latex_label=r"$\iota$",
+                           unit="$^\circ$", minimum=0, maximum=90)
 priors['q'] = KDE_Prior(q[0], "q", latex_label="q", minimum=0.15, maximum=1)
 
 result = bilby.run_sampler(likelihood=likelihood, priors=priors, sampler='pymultinest',

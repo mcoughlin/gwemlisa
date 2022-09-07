@@ -8,8 +8,8 @@ from common import DEFAULT_INJECTION_PARAMETERS, basic_model
 parser = argparse.ArgumentParser()
 parser.add_argument("--outdir", help="path to the ouput directory")
 parser.add_argument("--label", type=str, help="label for the ouput lightcurve")
-parser.add_argument("--period", type=float, help="period [days]")
-parser.add_argument("--t-zero", type=float, help="t-zero")
+parser.add_argument("--period", type=float, help="period [s]")
+parser.add_argument("--t-zero", type=float, help="t-zero [s]")
 parser.add_argument("--incl", type=float, help="inclination [degrees]")
 parser.add_argument("--massratio", type=float, help="mass ratio (m2/m1)")
 parser.add_argument("--radius", type=float, nargs='+', help="radii (scaled)")
@@ -37,7 +37,7 @@ flux = data[:, 3] / np.max(data[:, 3])
 flux_err = args.error_mult * np.sqrt(data[:, 4]**2 + errorbudget**2) / np.max(data[:, 3])
 
 # Shift the times so that the mid-point is equal to t-zero
-t_obs = np.sort(data[:, 0] - (data[:, 0][0] + data[:, 0][-1])/2 + args.t_zero)
+t_obs = np.sort(data[:, 0] - (data[:, 0][0] + data[:, 0][-1])/2)*(24*60*60) + args.t_zero
 
 # Set up the full set of injection parameters
 injection_parameters = DEFAULT_INJECTION_PARAMETERS
@@ -62,13 +62,13 @@ flux = basic_model(t_obs, **injection_parameters)
 # Write the lightcurve to file
 lightcurve_data = np.array([t_obs, flux, flux_err]).T
 np.savetxt(Path(args.outdir).joinpath(f'{label}.dat'), lightcurve_data,
-        fmt='%.15g', header="MJD flux fluxerr")
+        fmt='%.15g', header="time flux fluxerr")
 
 # Generate a plot of the data
 plt.figure(figsize=(12, 8))
-plt.xlim([args.t_zero, args.t_zero+0.1])
+plt.xlim([args.t_zero, args.t_zero + 0.1*(24*60*60)])
 plt.ylim([0, 0.04])
-plt.xlabel("time [days]", fontsize=18, labelpad=10)
+plt.xlabel("time [s]", fontsize=18, labelpad=10)
 plt.ylabel("flux", fontsize=18, labelpad=10)
 plt.plot(t_obs, flux, zorder=3)
 plt.errorbar(t_obs, flux, flux_err)

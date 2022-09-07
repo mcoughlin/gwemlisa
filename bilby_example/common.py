@@ -14,10 +14,7 @@ MSUN = 1.989e30    # solar mass (kg)
 
 
 # Default injection values
-DEFAULT_INJECTION_PARAMETERS = dict(
-    ldc_1=0.2, ldc_2=0.4548, gdc_1=None, gdc_2=0.61, scale_factor=1, incl=90,
-    f_c=0, f_s=0, sbratio=0.25, heat_1=None, heat_2=5, t_exp=3/(60*60*24)
-)
+DEFAULT_INJECTION_PARAMETERS = dict(scale_factor=1, incl=90, f_c=0, f_s=0, t_exp=3)
 
 
 def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2,
@@ -28,13 +25,13 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2
     Parameters
     ==========
     t_obs : array_like
-        array of observation times [days]
+        array of observation times [s]
 
     t_zero : float
-        starting time of observations [days]
+        starting time of observations [s]
 
     period : float
-        starting orbital period [days]
+        starting orbital period [s]
 
     q : float
         mass ratio (m2/m1)
@@ -76,7 +73,7 @@ def basic_model(t_obs, t_zero, period, q, incl, radius_1, radius_2, ldc_1, ldc_2
         coefficient for simplified reflection model
 
     t_exp : float
-        exposure time [days]
+        exposure time [s]
 
     scale_factor : float
         constant factor to multiply flux by
@@ -126,16 +123,16 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
     Parameters
     ==========
     times : array_like
-        array of observation times [days]
+        array of observation times [s]
 
     p0 : float
-        starting orbital period [days]
+        starting orbital period [s]
 
     pdot : float
-        rate of change of period
+        rate of change of period [s/s]
 
     t_zero : float
-        starting time of observation [days]
+        starting time of observation [s]
 
     Returns
     =======
@@ -149,7 +146,7 @@ def pdot_phasefold(t_obs, p0, pdot, t_zero=0):
     return np.mod(t_obs - 1/2*(pdot/p0)*t_obs**2, p0) / p0
 
 
-def periodfind(binary, observation):
+def periodfind(binary, observation, lightcurve):
     """
     Function which recovers the period for a given set of observations
 
@@ -161,22 +158,32 @@ def periodfind(binary, observation):
     observation : Observation
         binary observation object
 
+    lightcurve : dict
+        dictionary of lightcurve parameter
+
     Returns
     =======
     period : float
-        recovered orbital period [days]
+        recovered orbital period [s]
 
     period_err : float
-        error in recovered orbital period [days]
+        error in recovered orbital period [s]
     """
     # Set up the full set of injection_parameters
     injection_parameters = DEFAULT_INJECTION_PARAMETERS
-    injection_parameters["period"] = binary.p0
-    injection_parameters["t_zero"] = observation.obstimes[0]
-    injection_parameters["q"] = binary.q
-    injection_parameters["radius_1"] = binary.r1
-    injection_parameters["radius_2"] = binary.r2
-    injection_parameters["pdot"] = binary.pdot
+    injection_parameters['period'] = binary.p0
+    injection_parameters['t_zero'] = observation.obstimes[0]
+    injection_parameters['q'] = binary.q
+    injection_parameters['radius_1'] = binary.r1
+    injection_parameters['radius_2'] = binary.r2
+    injection_parameters['sbratio'] = lightcurve['sbratio']
+    injection_parameters['ldc_1'] = lightcurve['ldc_1']
+    injection_parameters['ldc_2'] = lightcurve['ldc_2']
+    injection_parameters['gdc_1'] = lightcurve['gdc_1']
+    injection_parameters['gdc_2'] = lightcurve['gdc_2']
+    injection_parameters['heat_1'] = lightcurve['heat_1']
+    injection_parameters['heat_2'] = lightcurve['heat_2']
+    injection_parameters['pdot'] = binary.pdot
 
     # Generate list of observation times
     t_obs = Observation(binary, t_zero=observation.obstimes[0],
@@ -193,7 +200,7 @@ def periodfind(binary, observation):
     pdots_to_test = np.array([0, binary.pdot]).astype(np.float32)
 
     # Normalize lightcurve and construct time and magnitude arrays
-    lc = (lc - np.min(lc)) / (np.max(lc)-np.min(lc))
+    lc = (lc - np.min(lc)) / (np.max(lc) - np.min(lc))
     time_stack = [t_obs.astype(np.float32)]
     mag_stack = [lc.astype(np.float32)]
 
@@ -236,15 +243,14 @@ def fdotgw(mchirp, p0):
         chirp mass [Solar Masses]
 
     p0 : float
-        starting orbital period [days]
+        starting orbital period [s]
 
     Returns
     =======
     fdot : float array
         rate of change of GW frequency [Hz/s]
     """
-    f0 = 2/p0 / (60*60*24)
-    return 96/5 * np.pi**(8/3) * (G * mchirp*MSUN / c**3)**(5/3) * f0**(11/3)
+    return 96/5 * np.pi**(8/3) * (G*mchirp*MSUN / c**3)**(5/3) * (2/p0)**(11/3)
 
 
 def chirp_mass(f0, fdot):
@@ -274,7 +280,7 @@ def semi_major_axis(p0, mchirp, q):
     Parameters
     ==========
     p0 : float
-        starting period [days]
+        starting period [s]
 
     mchirp : array_like
         chirp mass [Solar Masses]
@@ -287,7 +293,7 @@ def semi_major_axis(p0, mchirp, q):
     a : float array
         semi-major axis (mean separation) [km]
     """
-    return (G*mchirp*MSUN*((1+q)**2/q)**(3/5)*(p0*(60*60*24)/(2*np.pi))**2)**(1/3)/1000
+    return (G*mchirp*MSUN*((1+q)**2/q)**(3/5)*(p0/(2*np.pi))**2)**(1/3)/1000
 
 
 def q_minimum(mchirp):
@@ -315,7 +321,7 @@ def q_minimum(mchirp):
     return q_min
 
 
-def parameter_dict(binary, observation, lightcurve):
+def parameter_dict(binary, observation, lightcurve, pf_period=None, pf_period_err=None):
     """ 
     Function which organizes binary parameters into a dictionary structure
 
@@ -329,6 +335,9 @@ def parameter_dict(binary, observation, lightcurve):
 
     lightcurve : dict
         lightcurve parameters [sbratio, ldc_1, ldc_2, gdc_1, gdc_2, heat_1, heat_2]
+
+    periodfind: float array
+        period and uncertainty from periodfind if given
 
     Returns
     =======
@@ -347,14 +356,14 @@ def parameter_dict(binary, observation, lightcurve):
             'unit': 'Hz/s'
         },
         '$P_0$': {
-            'value': binary.p0*(60*24),
+            'value': binary.p0,
             'description': 'initial orbital period',
-            'unit': 'min'
+            'unit': 's'
         },
         '$\dot{P}$': {
             'value': binary.pdot,
             'description': 'time derivative of orbital period',
-            'unit': None
+            'unit': 's/s'
         },
         r'$\iota$': {
             'value': binary.incl,
@@ -385,6 +394,16 @@ def parameter_dict(binary, observation, lightcurve):
             'value': binary.m2,
             'description': 'mass of body 2 (secondary)',
             'unit': 'Solar Masses'
+        },
+        '$r_1$': {
+            'value': binary.r1,
+            'description': 'scaled radius of body 1',
+            'unit': None
+        },
+        '$r_2$': {
+            'value': binary.r2,
+            'description': 'scaled radius of body 2',
+            'unit': None
         },
         'a': {
             'value': binary.a,
@@ -459,12 +478,22 @@ def parameter_dict(binary, observation, lightcurve):
         '$t_0$': {
             'value': list(observation.phases),
             'description': 'reference epoch for each observation',
-            'unit': 'day'
+            'unit': 's'
         },
         'P': {
-            'value': list(observation.periods*(60*24)),
+            'value': list(observation.periods),
             'description': 'period at each observation time',
-            'unit': 'min'
+            'unit': 's'
+        },
+        r'$P_{pf}$': {
+            'value': float(pf_period),
+            'description': 'periodfind period',
+            'unit': 's'
+        },
+        r'$P_{pf,err}$': {
+            'value': float(pf_period_err),
+            'description': 'uncertainty of periodfind period',
+            'unit': 's'
         }
     }
     return parameter_dict
@@ -490,7 +519,7 @@ class KDE_Prior(bilby.core.prior.Prior):
         return self.kde.resample(1)
 
     def prob(self, val):
-        return self.kde.pdf(val)
+        return self.kde.pdf(val) * self.is_in_prior_range(val)
 
 
 class Uniform_Cosine_Prior(bilby.core.prior.Prior):
@@ -554,10 +583,10 @@ class Binary:
         Properties
         ==========
         p0 : float
-            starting orbital period [days]
+            starting orbital period [s]
 
         pdot : float
-            rate of change of orbital period
+            rate of change of orbital period [s/s]
 
         mchirp : float
             chirp mass [Solar Masses]
@@ -604,7 +633,7 @@ class Binary:
 
     @property
     def p0(self):
-        return 2 / self.f0 / (60*60*24)
+        return 2 / self.f0
 
     @property
     def pdot(self):
@@ -666,11 +695,11 @@ class Observation:
             binary object being observed
 
         t_obs : float array
-            array with observation times [days].
+            array with observation times [s].
             If specified, all other observation parameters are ignored.
 
         t_zero : float
-            starting time of observations [days]
+            starting time of observations [s]
 
         numobs : int
             number of observations
@@ -684,20 +713,20 @@ class Observation:
         Properties
         ==========
         obstimes : float array
-            observation times [days]
+            observation times [s]
 
         phases : float array
-            times of eclipses [days]
+            times of eclipses [s]
 
         periods : float array
-            orbital periods at observation times [days]
+            orbital periods at observation times [s]
         """
         self.binary = binary
         self.t_obs = t_obs
         self.t_zero = t_zero
         self.numobs = numobs
-        self.mean_dt = mean_dt
-        self.std_dt = std_dt
+        self.mean_dt = mean_dt*(24*60*60)
+        self.std_dt = std_dt*(24*60*60)
         if self.t_obs is None:
             t = np.full(self.numobs, self.t_zero)
             for i in range(1, len(t)):
@@ -713,9 +742,9 @@ class Observation:
     @property
     def phases(self):
         delta_t = self.obstimes - self.t_zero
-        return delta_t - 1/2*(self.binary.fdot/self.binary.f0)*(60*60*24)*delta_t**2
+        return delta_t - 1/2*(self.binary.fdot/self.binary.f0)*delta_t**2
 
     @property
     def periods(self):
-        tau = 3/8 * (self.binary.f0/self.binary.fdot) / (60*60*24)
-        return 2/self.binary.f0 * (1 - self.obstimes/tau)**(3/8) / (60*60*24)
+        tau = 3/8 * self.binary.f0 / self.binary.fdot
+        return 2/self.binary.f0 * (1 - self.obstimes/tau)**(3/8)

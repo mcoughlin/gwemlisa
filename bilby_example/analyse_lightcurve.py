@@ -16,11 +16,11 @@ parser.add_argument("--lightcurve", help="path to the lightcurve file")
 parser.add_argument("--nth-in", default=10, type=int,
         help="read every nth line of the lightcurve file")
 parser.add_argument("--gw-chain", help="chain file for computing GW priors")
-parser.add_argument("--period", type=float, help="period [days]")
+parser.add_argument("--period", type=float, help="period [s]")
 parser.add_argument("--period-err", default=1e-5, type=float,
-        help="period uncertainty [days]")
-parser.add_argument("--pdot", type=float, help="time rate of change of period")
-parser.add_argument("--t-zero", type=float, help="t-zero [days]")
+        help="period uncertainty [s]")
+parser.add_argument("--pdot", type=float, help="time rate of change of period [s/s]")
+parser.add_argument("--t-zero", type=float, help="t-zero [s]")
 parser.add_argument("--incl", type=float, help="inclination [deg])")
 parser.add_argument("--massratio", type=float, help="mass ratio (m2/m1)")
 parser.add_argument("--radius", type=float, nargs='+', help="radii (scaled)")
@@ -43,7 +43,7 @@ if not Path(args.outdir).is_dir():
 data = np.genfromtxt(Path(args.lightcurve), names=True)[::args.nth_in]
 
 # Set up the likelihood function
-likelihood = GaussianLikelihood(data['MJD'], data['flux'], basic_model, data['fluxerr'])
+likelihood = GaussianLikelihood(data['time'], data['flux'], basic_model, data['fluxerr'])
 
 # Set up the full set of injection parameters
 injection = DEFAULT_INJECTION_PARAMETERS
@@ -65,7 +65,7 @@ injection['heat_2'] = args.heat[1]
 priors = bilby.core.prior.PriorDict()
 priors.update({key: val for key, val in injection.items() if isinstance(val, (int, float))})
 priors['t_zero'] = Uniform(args.t_zero - args.period/2, args.t_zero + args.period/2,
-        "t_zero", latex_label="$t_0$", unit="days")
+        "t_zero", latex_label="$t_0$", unit="s")
 priors['q'] = Uniform(0.15, 1, "massratio", latex_label="q")
 priors['radius_1'] = Uniform(0, 1, "radius_1", latex_label="$r_1$")
 priors['radius_2'] = Uniform(0, 1, "radius_2", latex_label="$r_2$")
@@ -81,16 +81,16 @@ if args.gw_chain:
     # Set up GW priors for inclination and period
     data_out = np.loadtxt(Path(args.gw_chain))
     tau = 3/8 * args.period/args.pdot
-    period_prior_vals = (2/data_out[:, 0] / (60*60*24)) * (1 - args.t_zero/tau)**(3/8)
-    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="P", unit="days")
+    period_prior_vals = (2/data_out[:, 0]) * (1 - args.t_zero/tau)**(3/8)
+    priors['period'] = KDE_Prior(period_prior_vals, "period", latex_label="P", unit="s")
     incl_prior_vals = 90 - np.abs(np.degrees(np.arccos(data_out[:, 5])) - 90)
     priors['incl'] = KDE_Prior(incl_prior_vals, "incl", latex_label=r"$\iota$",
             unit="$^\circ$", minimum=0, maximum=90)
     label += '_GW-prior'
 else:
     # Set up EM priors for inclination and period
-    priors['period'] = Normal(args.period, args.period_err, "period", latex_label="$P_0$", unit="days")
-    priors['incl'] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$", unit="deg")
+    priors['period'] = Normal(args.period, args.period_err, "period", latex_label="P", unit="s")
+    priors['incl'] = Uniform_Cosine_Prior(0, 90, "incl", latex_label=r"$\iota$", unit="$^\circ$")
     label += '_EM-prior'
 
 with warnings.catch_warnings():
